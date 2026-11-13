@@ -42,10 +42,16 @@ Check flags and settings against your own version before relying on them.
 
 ## Quirks worth knowing
 
-- **The door is a file relay because the sandbox blocks the obvious alternative.**
-  Sandboxed commands could not reach localhost (tested). Whether a Unix socket would be
-  allowed was unclear from the documentation and was not tried. A request file inside the
-  workspace needs no permission at all.
+- **The door is a file relay because the sandbox blocks the alternatives.** Sandboxed
+  commands could not reach localhost, and connecting to an existing Unix socket failed
+  with "Operation not permitted" (both tested). A request file inside the workspace needs
+  no permission at all.
+- **tmux is out of the agents' reach.** Inside the sandbox, `tmux ls` cannot connect to
+  the server's socket (tested), so an agent cannot type into another agent's window. The
+  fixed rules in `hook.py` also block the command.
+- **Headless sessions work without tmux.** Two `claude -p` sessions started at once from a
+  plain shell, with no terminal, both ran and replied. The full team has not been run
+  that way; it would need another way to tell agents that a pause is cleared.
 - **Stub dotfiles appear inside each workspace.** Within the sandbox, protected names such
   as `.bashrc` and `.gitmodules` show up as untracked files, and Git warns that it cannot
   read `.gitmodules`. `setup.sh` adds `/.*` to each clone's `.git/info/exclude`.

@@ -57,6 +57,10 @@ pytest as the checker. A different runtime needs its own way to intercept action
 agents off, and refuse a stop. `SKILL.md` section 4 lists fallbacks for each and says what
 you lose with the weaker ones.
 
+One tool from the example is recommended wherever it is available: tmux. It gives an agent
+a terminal it can create by itself, keeps sessions alive, lets a person watch each agent,
+and lets the operator type into a running session.
+
 ## Evidence so far
 
 The example has been run three times, on 2026-11-12 and 2026-11-13, on one Linux VM with

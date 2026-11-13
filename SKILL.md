@@ -193,7 +193,7 @@ you fill in here goes into your final report.
 
 | Need | Rules | Options, strongest first |
 |---|---|---|
-| Separate sessions | 8 | A VM or container per agent. Separate processes of an agent CLI, one per terminal window or background job. Subagents inside your own session. |
+| Separate sessions | 8 | A VM or container per agent. Separate processes of an agent CLI, one per tmux window (see below) or background job. Subagents inside your own session. |
 | Walls | 5 | A VM or container. An OS sandbox around the agent's shell (bubblewrap, Seatbelt, or one built into the agent runtime). A separate OS user per agent. Instructions only. |
 | Whiteboard | 1 | A database server with one account per agent. A single-file database only the gateway can open. Files with atomic rename, behind the gateway. |
 | Identity and door | 3, 4 | Per-agent credentials held only by the gateway. A per-agent channel inside that agent's walls. A name the agent supplies. |
@@ -204,6 +204,34 @@ you fill in here goes into your final report.
 
 The last option in most rows makes the rule **advisory**: agents are asked to follow it and
 nothing enforces it.
+
+**Take a terminal multiplexer if you can get one.** When the agents are separate processes
+of an agent CLI, run them in tmux or an equivalent: one session for the team, one window
+per agent, and windows for the gateway and a live view of the board. It is cheap to
+install, and it solves four problems at once:
+
+- **A terminal you can create yourself.** Interactive agent sessions need one, and there
+  is no person to open it for you.
+- **Sessions that outlive your shell.**
+- **A live view.** The user can attach and watch any agent work.
+- **A way in.** You can type into a running session and read what it shows. This is how
+  the operator answers a startup prompt, announces that a pause is cleared, and sends
+  time reminders.
+
+```
+tmux new-session -d -s team -n gateway '<start the gateway>'
+tmux new-window  -d -t team -n h1 -c <h1 workspace> '<start the agent>; exec bash'
+tmux send-keys   -t team:h1 -l '<text>'     # then, after a short pause:
+tmux send-keys   -t team:h1 Enter
+tmux capture-pane -p -t team:h1             # read what the window shows
+tmux kill-session -t team
+```
+
+Ending a window's command with `exec bash` keeps the window open after the agent exits.
+The multiplexer sits outside the walls, so confirm in the wall test that agents cannot
+reach it: an agent that can run it can type into another agent's window. If your agent
+CLI has a headless mode, that needs no terminal at all, but it gives up the live view and
+the way in.
 
 **Walls decide the rest.** If the walls are advisory, then the whiteboard, identity, the
 door and the records are advisory too, whichever option you picked for them, because an
@@ -243,7 +271,8 @@ the real run starts clean.
    one winner; each request is logged under the right identity.
 3. **Walls.** *Test from inside a real agent session, not from your own shell.* These must
    fail: writing outside the workspace, listing a neighbour's workspace, reading the
-   harness, reaching the network, reaching the database directly. These must still work:
+   harness, reaching the network, reaching the database directly, reaching the terminal
+   multiplexer. These must still work:
    the door, a Git commit, the local checker.
 4. **Monitor and pause.** *Test:* a violating command is blocked, the pause is set, other
    agents are refused while paused, and a resume clears it. Also feed the rules harmless
