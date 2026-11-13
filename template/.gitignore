@@ -1,0 +1,8 @@
+# created by setup.sh and by a run
+/ws/
+/central.git/
+/records/
+/state/
+/tools/
+/harness/settings/
+__pycache__/

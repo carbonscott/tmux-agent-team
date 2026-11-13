@@ -1,0 +1,91 @@
+#!/usr/bin/python3
+"""team: the only door out of an agent sandbox.
+
+Requests are dropped in this workspace's spool (.gw/req) and relayed by the
+gateway, which stamps them with this workspace's agent identity.
+"""
+import json
+import os
+import sys
+import time
+import uuid
+
+USAGE = """usage:
+  team whoami                 your identity as the gateway sees it
+  team status                 time left, what has landed on main, pause state
+  team sql "<SQL>"            run SQL on the team board; me() is your identity
+  team sql -f FILE | team sql -     SQL from a file / stdin
+  team push                   publish your committed HEAD to branch agent/<you>
+  team mr "<title>"           push, then ask the merge job to land it on main
+  team wait <seconds>         sleep (max 110), then print status
+"""
+
+
+def ws_root():
+    d = os.path.realpath(os.getcwd())
+    while True:
+        if os.path.isdir(os.path.join(d, ".gw", "req")):
+            return d
+        p = os.path.dirname(d)
+        if p == d:
+            sys.exit("team: not inside an agent workspace (no .gw/ found)")
+        d = p
+
+
+def call(op, timeout, **kw):
+    root = ws_root()
+    rid = uuid.uuid4().hex
+    req = os.path.join(root, ".gw", "req", rid + ".json")
+    resp = os.path.join(root, ".gw", "resp", rid + ".json")
+    with open(req + ".tmp", "w") as f:
+        json.dump(dict(id=rid, op=op, **kw), f)
+    os.rename(req + ".tmp", req)
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        if os.path.exists(resp):
+            with open(resp) as f:
+                r = json.load(f)
+            os.unlink(resp)
+            out = r.get("out", "")
+            if out:
+                print(out)
+            return r.get("code", 0)
+        time.sleep(0.05)
+    print("team: gateway did not answer within %ds" % timeout, file=sys.stderr)
+    return 75
+
+
+def main(argv):
+    if not argv or argv[0] in ("help", "-h", "--help"):
+        print(USAGE)
+        return 0
+    cmd, args = argv[0], argv[1:]
+    if cmd == "whoami":
+        return call("whoami", 20)
+    if cmd == "status":
+        return call("status", 20)
+    if cmd == "sql":
+        if not args:
+            print(USAGE)
+            return 2
+        if args[0] == "-":
+            q = sys.stdin.read()
+        elif args[0] == "-f":
+            q = open(args[1]).read()
+        else:
+            q = " ".join(args)
+        return call("sql", 40, sql=q)
+    if cmd == "push":
+        return call("push", 60)
+    if cmd == "mr":
+        return call("mr", 400, title=" ".join(args) or "(no title)")
+    if cmd == "wait":
+        n = max(1, min(110, int(float(args[0])) if args else 30))
+        time.sleep(n)
+        return call("status", 20)
+    print(USAGE)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

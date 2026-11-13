@@ -1,4 +1,0 @@
-#!/bin/sh
-# The same pytest the merge job uses.
-R=$(cd "$(dirname "$0")/.." && pwd)
-exec "$R/tools/venv/bin/python" -m pytest -p no:cacheprovider "$@"

@@ -1,0 +1,16 @@
+{
+  "session": "team",
+  "agents": ["lead", "h1", "h2", "h3"],
+  "budget_min": 45,
+  "sql_timeout_s": 5,
+  "db_cap_bytes": 268435456,
+  "extra_private_paths": [],
+  "task": {
+    "statements": ["roman", "rle", "base", "primes", "intervals", "calc", "final"],
+    "check": "pytest -q -x --no-header tests/test_{name}.py",
+    "attempted_if": "kit/{name}.py",
+    "allowed_paths": ["kit/(?!__init__)[A-Za-z0-9_]+\\.py"],
+    "check_timeout_s": 180,
+    "toolchain_paths": []
+  }
+}
