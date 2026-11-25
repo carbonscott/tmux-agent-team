@@ -47,11 +47,27 @@ echo "-- the merge job"
 cd "$R/ws/$H1" || exit 1
 echo x > outside_probe.txt; git add -A; git commit -q -m "edit outside the allowed paths"
 check "a change outside the allowed paths is rejected" 'REJECTED: these paths' $T mr "outside probe"
+# With task.attempted_if, a wrong answer is rejected. Without it (a task from from-goal.py), every
+# statement is checked on every merge and a wrong answer is merged but not counted as done.
+ATT=$(python3 -c "import json; print(json.load(open('$R/config.json'))['task'].get('attempted_if') or '')")
+landed() { cat "$R/state/landed.json"; }
 if [ -d "$R/task/probe/bad" ] && [ -d "$R/task/probe/good" ]; then
   git reset -q --hard origin/main; cp -r "$R/task/probe/bad/." .; git add -A; git commit -q -m "bad probe"
-  check "the task's wrong answer is rejected"        'REJECTED by the check'      $T mr "bad probe"
-  git reset -q --hard origin/main; cp -r "$R/task/probe/good/." .; git add -A; git commit -q -m "good probe"
-  check "the task's right answer is accepted"        'ACCEPTED: merged into main' $T mr "good probe"
+  if [ -n "$ATT" ]; then
+    check "the task's wrong answer is rejected"      'REJECTED by the check'      $T mr "bad probe"
+  else
+    check "the task's wrong answer is merged but not counted as done" 'FAILED|REJECTED' $T mr "bad probe"
+  fi
+  BAD=$(landed)
+  git fetch -q origin; git reset -q --hard origin/main; cp -r "$R/task/probe/good/." .; git add -A; git commit -q -m "good probe"
+  if [ -n "$ATT" ]; then
+    check "the task's right answer is accepted"      'ACCEPTED: merged into main' $T mr "good probe"
+  else
+    $T mr "good probe" >/dev/null 2>&1
+    check "the task's right answer is counted as done" '^counted:' python3 -c "
+import json, sys; new = [s for s in json.loads(sys.argv[2]) if s not in json.loads(sys.argv[1])]
+print('counted: ' + ' '.join(new) if new else 'nothing new is done: the probe answers no statement')" "$BAD" "$(landed)"
+  fi
 else
   echo "SKIP  no task/probe/good and task/probe/bad: nothing shows that the check can tell right from wrong"
 fi

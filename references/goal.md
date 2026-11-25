@@ -41,15 +41,38 @@ contract's `goal` and `guardrails`.
 statement), and `task.allowed_paths` from `--allowed`; it removes `task.attempted_if`, and
 makes `task.check` a command that fails, so a statement added later without its own check
 can never pass by accident. It also writes `task/seed/STATEMENTS.md` with each statement's
-name, text and check, the guardrails and the allowed paths. The allowed paths are not
+name, text and check, the guardrails and the allowed paths. Text that was already in
+`STATEMENTS.md` (the example task's spec, or your own) is never dropped silently: it is kept
+below the generated statements, under "Earlier text of this file", with its headings nested,
+and `--apply` says so. Keep what still describes the task (a detailed spec the checks do not
+cover is exactly what the agents need) and delete the rest before `setup.sh`;
+`--replace-statements` drops it instead. The allowed paths are not
 guessed from the guardrails' prose: `Do not modify any file outside out/` becomes
 `--allowed 'out/.*'` because you say so. A pattern that would let agents rewrite
 `STATEMENTS.md` is warned about.
 
-It touches nothing else in `task/`. Put the frozen files the checks need into `task/seed/`,
-make `task/install.sh` install the checks' tools (or delete it), and make `task/probe/good`
-and `task/probe/bad` a right and a wrong answer to one statement (or delete them;
-`test_gateway.sh` then says it skipped that step). Then follow `SKILL.md` from step 3.
+It touches nothing else in `task/` but the probe. Put the frozen files the checks need into
+`task/seed/`, and make `task/install.sh` install the checks' tools (or delete it).
+
+**The probe.** `from-goal.py` never writes `task/probe/`: it cannot know a right answer. A
+probe whose files the new allowed paths freeze (the example's `kit/roman.py` under
+`--allowed 'out/.*'`) cannot answer the new task, so `--apply` removes it and says so; any
+other probe is kept, and `--apply` names its files for you to confirm. Before `setup.sh`,
+pick one statement and write
+
+- `task/probe/good/`: the files of a right answer to it, laid out as in the repository
+  (for the item "`out/alpha.txt` holds ok", the file `task/probe/good/out/alpha.txt`
+  holding `ok`), so that the statement's check passes;
+- `task/probe/bad/`: the same files with a wrong answer, so that the check fails.
+
+A task from `from-goal.py` has no `task.attempted_if`, so `test_gateway.sh` then shows
+"the task's wrong answer is merged but not counted as done" (the merge job's report names
+the statement `FAILED`) and "the task's right answer is counted as done" (the statement
+moves into `landed.json`). Both must say PASS; the second fails when the probe answers no
+statement. Do not add `attempted_if` back just to make the test pass: it is right only when
+each statement has a file whose presence means it was attempted, and then a wrong answer is
+rejected instead. Without a probe `test_gateway.sh` says it skipped the step. Then follow
+`SKILL.md` from step 3.
 
 **How the checks run.** A statement in `task.checks` is checked with its own command,
 exactly as written (no `{name}` substitution, so shell braces such as `awk '{print $1}'`
@@ -58,7 +81,8 @@ follow it. The command runs at the root of the merged tree in the merge job's sa
 network, no home directory, only `/usr`, `/etc`, `tools/` and `task.toolchain_paths`.
 Without `task.attempted_if` every statement is checked on every merge; a merge is rejected
 only when it breaks a statement that was already done, and a wrong answer to an open
-statement simply does not count.
+statement simply does not count. The merge job's report then names every statement's
+result (`checked: alpha ok; beta FAILED (...)`), so an agent sees what still fails.
 
 ### 2. The boss's own condition
 

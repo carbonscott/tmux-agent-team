@@ -374,7 +374,8 @@ def run_check(tree, name):
 
 
 def verify(tree):
-    """A statement that has been attempted must pass its check. Returns (ok, report, passing)."""
+    """With task.attempted_if, a statement that has been attempted must pass its check. Without it,
+    every statement is checked and one that fails is simply not done. Returns (ok, report, passing)."""
     probe = TASK.get("attempted_if")
     passing = []
     for s in STATEMENTS:
@@ -386,7 +387,12 @@ def verify(tree):
             passing.append(s)
         elif probe:
             return False, "statement `%s` does not pass its check:\n%s" % (s, out), passing
-    return True, "checked: %s" % (" ".join(passing) or "nothing attempted yet"), passing
+    if probe:
+        return True, "checked: %s" % (" ".join(passing) or "nothing attempted yet"), passing
+    failed = [s for s in STATEMENTS if s not in passing]
+    return True, "checked: %s%s" % ("; ".join("%s %s" % (s, "ok" if s in passing else "FAILED") for s in STATEMENTS),
+                                    " (a statement that fails its check is not done; it does not stop a merge)"
+                                    if failed else ""), passing
 
 
 def do_mr(agent, title):
