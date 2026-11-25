@@ -29,7 +29,7 @@ The skill activates only when invoked by name.
     ./launch.sh && harness/boss.sh trust
     tmux attach -t team           # watch; the "board" window shows the team's board
     python3 harness/verify.py     # afterwards: check the result on a fresh checkout
-    ./teardown.sh --purge
+    ./teardown.sh --archive       # stop; keep the repository and records in one dated file; clean up
 
 The example task is a seven-module Python package whose frozen tests are the statements.
 Four agents finish it in about two minutes.
