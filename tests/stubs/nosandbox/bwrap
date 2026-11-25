@@ -1,0 +1,13 @@
+#!/usr/bin/python3
+"""Stand-in for bwrap, used by tests/lib.sh only where a real sandbox cannot be nested (for
+example inside an agent's own sandbox). It runs the toy check in the merged tree with no
+isolation at all. The merge job of a real run never uses it."""
+import os, subprocess, sys
+a = sys.argv[1:]
+tree = next(a[i + 1] for i in range(len(a) - 2) if a[i] == "--bind" and a[i + 2] == "/work")
+env = dict(os.environ)
+for i in range(len(a) - 2):
+    if a[i] == "--setenv":
+        env[a[i + 1]] = a[i + 2]
+env["PATH"] = env.get("PATH", "") + ":" + os.environ.get("PATH", "")
+sys.exit(subprocess.run(a[a.index("sh", a.index("/work")):], cwd=tree, env=env).returncode)

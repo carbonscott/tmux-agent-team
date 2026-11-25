@@ -53,6 +53,7 @@ Settings in `config.json`:
 |---|---|
 | `agents` | Names of the agents. One must be `lead`; every other name is a helper. Any number. |
 | `budget_min` | Time budget for the run, in minutes |
+| `model`, `effort` | The model and the effort level every agent runs with. An empty `model` means Claude Code's default; `effort` defaults to `medium`. |
 | `session` | Name of the tmux session |
 | `task.statements` | Names of the statements |
 | `task.check` | Shell command that checks one statement in the repository root. `{name}` is replaced by the statement's name. Exit status 0 means done. |

@@ -1,0 +1,9 @@
+#!/usr/bin/python3
+"""Stub claude for the tests: starts no session. It appends its arguments, as one JSON
+list per call, to $STUB_DIR/claude.calls.jsonl, and writes the last call to
+$STUB_DIR/claude.argv.json."""
+import json, os, sys
+d = os.environ["STUB_DIR"]
+with open(d + "/claude.calls.jsonl", "a") as f:
+    f.write(json.dumps(sys.argv[1:]) + "\n")
+json.dump(sys.argv[1:], open(d + "/claude.argv.json", "w"))

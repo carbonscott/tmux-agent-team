@@ -1,0 +1,13 @@
+#!/bin/sh
+# Stub tmux for the tests: starts nothing. It logs each call to $STUB_DIR/calls.log and
+# keeps one fact, whether "the session" exists, as the file $STUB_DIR/session.
+: "${STUB_DIR:?the tests set STUB_DIR}"
+echo "tmux $*" >> "$STUB_DIR/calls.log"
+case "${1:-}" in
+  has-session)  [ -e "$STUB_DIR/session" ] ;;
+  new-session)  touch "$STUB_DIR/session" ;;
+  kill-session) [ -e "$STUB_DIR/session" ] && rm -f "$STUB_DIR/session" ;;
+  kill-server)  rm -f "$STUB_DIR/session" ;;
+  capture-pane) cat "$STUB_DIR/pane" 2>/dev/null; true ;;
+  *)            true ;;
+esac
