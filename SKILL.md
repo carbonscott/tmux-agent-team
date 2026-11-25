@@ -128,7 +128,7 @@ This runs `task/install.sh`, creates the central repository from `task/seed/`, a
     ./launch.sh
     harness/boss.sh trust       # run right after launch; it waits for each agent to start
 
-A new workspace folder makes Claude Code ask whether to trust it, and the agent does not start until someone answers. `boss.sh trust` answers yes in each agent window and reports one line per agent. Tell the user you did this.
+A new workspace folder makes Claude Code ask whether to trust it, and the agent does not start until someone answers. `boss.sh trust` answers yes in each agent window, waits to see each session running, and reports one line per agent: `answered yes, started`, or that the session did not start. Then look at that window; if the session quit, start it again there with `tmux send-keys -t '=<session>:<id>' "bash $PWD/harness/run-agent.sh <id>" Enter` and run `boss.sh trust` once more. Tell the user you did this.
 
 Tell the user they can watch with `tmux attach -t <session>`. The windows are `gateway` (request log), `board` (live view of the board), one per agent, and `reminders`. Set `TEAM_REMOTE_CONTROL=1` before `./launch.sh` to start each agent with Remote Control.
 

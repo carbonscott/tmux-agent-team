@@ -1,7 +1,8 @@
 #!/bin/bash
 # The boss's controls.
 #   boss.sh status              run state, and the blocked action if the team is paused
-#   boss.sh trust               answer "yes" to the workspace trust prompt in every agent window (waits for it)
+#   boss.sh trust               answer "yes" to the workspace trust prompt in every agent window (waits for it),
+#                               then wait to see each session running, and say so
 #   boss.sh say <id|all> "..."  type a message into an agent's window
 #   boss.sh messages            every message the agents sent each other (team msg), oldest first
 #   boss.sh resume              clear a reviewed pause and give the lost time back (to the deadline and the stall clock)
@@ -15,20 +16,30 @@ case "${1:-status}" in
           echo "profiles: $(python3 "$R/harness/profiles.py" --list)"
           st=$(python3 "$R/harness/runstate.py"); case "$st" in INTERRUPTED*|ended*) echo "== $st";; esac
           [ -e "$R/state/HALT" ] && { echo "blocked action:"; python3 -m json.tool "$R/state/HALT"; };;
-  trust)  # waits up to 20 s for the prompts to appear, so it can be run right after launch
+  trust)  # waits up to 30 s: for each prompt to appear (so it can be run right after launch), and,
+          # once answered, for the session to be seen running (its name team-<id> on screen)
           todo=" $(cfg agents) "; for a in $todo; do [ -e "$R/state/removed/$a" ] && todo=${todo/ $a / }; done
-          for i in $(seq 20); do
-            for a in $todo; do
+          sent=" "    # answered, not yet seen running
+          for i in $(seq 30); do
+            for a in $todo $sent; do
               pane=$(tmux capture-pane -p -t "=$S:$a" 2>/dev/null)
+              case "$sent" in *" $a "*)
+                if echo "$pane" | grep -q "claude exited"; then
+                  echo "$a: answered, but the session did not start (it exited): look at the window"; sent=${sent/ $a / }
+                elif echo "$pane" | grep -q "team-$a" && ! echo "$pane" | grep -q "trust this folder"; then
+                  echo "$a: answered yes, started"; sent=${sent/ $a / }
+                fi; continue;; esac
               if echo "$pane" | grep -q "trust this folder"; then
-                tmux send-keys -t "=$S:$a" Down; sleep 0.4; tmux send-keys -t "=$S:$a" Enter
-                echo "$a: answered yes"; todo=${todo/ $a / }
+                # the cursor may start on either answer: move it only when it is not on Yes
+                echo "$pane" | grep -qE '❯ *([0-9]+\. *)?Yes' || { tmux send-keys -t "=$S:$a" Down; sleep 0.4; }
+                tmux send-keys -t "=$S:$a" Enter; todo=${todo/ $a / }; sent="$sent$a "
               elif echo "$pane" | grep -q "team-$a"; then
                 echo "$a: started without a prompt"; todo=${todo/ $a / }
               fi
             done
-            [ -z "${todo// /}" ] && break; sleep 1
+            [ -z "${todo// /}" ] && [ -z "${sent// /}" ] && break; sleep 1
           done
+          for a in $sent; do echo "$a: answered, but the session was not seen running: look at the window"; done
           [ -n "${todo// /}" ] && echo "still starting, run again:$todo";;
   messages) python3 "$R/harness/board.py" --messages;;
   say)    if [ "$2" = all ]; then for a in $(cfg agents); do say "$a" "$3"; done; else say "$2" "$3"; fi;;
@@ -49,5 +60,5 @@ for f, need in (('deadline', True), ('stall_from', False)):
           echo "stall cleared; the stall clock starts again. Agents that stopped will not restart by themselves: boss.sh say all \"...\"";;
   remove) touch "$R/state/removed/$2" && echo "$2 removed. Ask the lead to reopen its tasks.";;
   end)    python3 -c "import time;open('$R/state/deadline','w').write(str(time.time()))"; echo "run ended";;
-  *)      sed -n 2,10p "$0";;
+  *)      sed -n 2,11p "$0";;
 esac

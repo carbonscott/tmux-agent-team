@@ -27,8 +27,11 @@ Check flags and settings against your own version.
 - **Stub dotfiles appear inside each workspace.** Within the sandbox, protected names such
   as `.bashrc` and `.gitmodules` show up as untracked files, and Git warns that it cannot
   read `.gitmodules`. `setup.sh` adds `/.*` to each clone's `.git/info/exclude`.
-- **New workspaces trigger the trust prompt**, with "No" selected. `harness/boss.sh trust`
-  answers it in every agent window. Once a folder is trusted the prompt does not return.
+- **New workspaces trigger the trust prompt.** The cursor has been seen on either answer, and
+  once an answer of "No, exit" quit the session while the old `boss.sh trust` reported
+  "answered yes". `harness/boss.sh trust` now moves the cursor only when it is not on "Yes",
+  and reports `started` only once the session's name (`team-<id>`) is on screen and the
+  prompt is gone. Once a folder is trusted the prompt does not return.
 - **`--tools` takes a list and will swallow the prompt.** Put `--` before the prompt.
 - **Hooks run outside the sandbox.** That is why they can write the records and the pause
   flag where the agent's shell cannot.

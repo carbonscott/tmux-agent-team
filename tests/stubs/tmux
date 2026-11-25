@@ -1,6 +1,8 @@
 #!/bin/sh
 # Stub tmux for the tests: starts nothing. It logs each call to $STUB_DIR/calls.log and
 # keeps one fact, whether "the session" exists, as the file $STUB_DIR/session.
+# capture-pane prints $STUB_DIR/pane; or, when $STUB_DIR/panes/<window>/ holds numbered files,
+# the lowest-numbered one, which it then deletes unless it is the last (a scripted sequence).
 : "${STUB_DIR:?the tests set STUB_DIR}"
 echo "tmux $*" >> "$STUB_DIR/calls.log"
 case "${1:-}" in
@@ -8,6 +10,9 @@ case "${1:-}" in
   new-session)  touch "$STUB_DIR/session" ;;
   kill-session) [ -e "$STUB_DIR/session" ] && rm -f "$STUB_DIR/session" ;;
   kill-server)  rm -f "$STUB_DIR/session" ;;
-  capture-pane) cat "$STUB_DIR/pane" 2>/dev/null; true ;;
+  capture-pane) win=$(echo "$*" | sed -n 's/.*-t [^ ]*:\([^ ]*\).*/\1/p'); d="$STUB_DIR/panes/$win"
+                first=$(ls "$d" 2>/dev/null | sort -n | head -1)
+                if [ -n "$first" ]; then cat "$d/$first"; [ "$(ls "$d" | wc -l)" -gt 1 ] && rm -f "$d/$first"
+                else cat "$STUB_DIR/pane" 2>/dev/null; fi; true ;;
   *)            true ;;
 esac

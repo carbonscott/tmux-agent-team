@@ -325,4 +325,27 @@ out=$(cd "$W" && harness/boss.sh status)
 check "G a live run shows the live clock, with no note" 'time left: [45] min  done on main' echo "$out"
 fi
 
+# ---- B: boss.sh trust confirms that each session started after it answered the prompt
+if want B; then
+mk_workdir lead h1 h2 h3; setup_wd; : > "$STUB_DIR/session"
+PROMPT_NO=$' Do you trust the files in this folder?\n Is this a project you created or one you trust?\n   1. Yes, I trust this folder\n \xe2\x9d\xaf 2. No, exit\n Enter to confirm'
+PROMPT_YES=$' Do you trust the files in this folder?\n Is this a project you created or one you trust?\n \xe2\x9d\xaf 1. Yes, I trust this folder\n   2. No, exit\n Enter to confirm'
+panes() { local a=$1 i=0; shift; mkdir -p "$STUB_DIR/panes/$a"; for p in "$@"; do i=$((i+1)); printf '%s\n' "$p" > "$STUB_DIR/panes/$a/$i"; done; }
+panes lead "$PROMPT_YES" "$PROMPT_YES" ' > _\n team-lead · auto mode'
+panes h1 "$PROMPT_NO" ' Claude Code\n team-h1 · auto mode'
+panes h2 "$PROMPT_NO" '[claude exited; shell kept open so the window persists]'
+panes h3 "$PROMPT_NO" 'loading...'
+: > "$STUB_DIR/calls.log"
+out=$(cd "$W" && harness/boss.sh trust 2>&1)
+check "B a session seen running after the answer is reported started" '^h1: answered yes, started$' echo "$out"
+check "B a session that exited is reported as not started" '^h2: answered, but the session did not start.*look at the window' echo "$out"
+refute "B and never as answered yes" '^h2: answered yes' echo "$out"
+check "B a session never seen running is reported so" '^h3: answered, but the session was not seen running.*look at the window' echo "$out"
+check "B with the cursor on Yes, only Enter is sent" '^lead: answered yes, started$' echo "$out"
+refute "B and no Down that would move it to No" 'send-keys -t =[^ ]*:lead Down' cat "$STUB_DIR/calls.log"
+check "B with the cursor on No, Down is sent first" 'send-keys -t =[^ ]*:h1 Down' cat "$STUB_DIR/calls.log"
+rm -rf "$STUB_DIR/panes"; printf ' team-h1 · auto mode\n' > "$STUB_DIR/pane"
+check "B the stub's single pane still works: started without a prompt" 'started without a prompt' sh -c "cd '$W' && harness/boss.sh trust"
+fi
+
 finish
