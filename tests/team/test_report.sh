@@ -195,6 +195,11 @@ check "SKILL.md puts the report in the finish steps" 'report\.py' cat "$REPO/SKI
 
 # ---- found by the live proof run
 check "the legend's swatches stay in the legend (no lane rule matches them)" '^ok$' swatches "$TOP/r.html"
+check "the legend draws time down and removal striped, like the marks it explains" '^ok$' python3 -c "
+import re, sys; css = open(sys.argv[1]).read()
+angle = lambda sel: (re.search(re.escape(sel) + r'\{[^}]*repeating-linear-gradient\((\d+deg)', css) or [None, None])[1]
+print('ok' if angle('.band.down') == angle('.k.down') and angle('.track .gone') == angle('.k.gone') and angle('.k.gone')
+      else (angle('.band.down'), angle('.k.down'), angle('.track .gone'), angle('.k.gone')))" "$TOP/r.html"
 check "text on green (statement chips, done labels) has 4.5:1 contrast in both themes" '^ok$' \
   contrast "$TOP/r.html" '.chips li.on' '.m.done'
 check "the state word (COMPLETE, STALLED, PAUSED, RUNNING) has 4.5:1 contrast in both themes" '^ok$' \
