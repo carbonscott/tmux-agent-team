@@ -16,9 +16,10 @@ If the table does not exist yet, the lead is still setting up: run `team wait 20
 
 ## How the team communicates
 
-There is no messaging, and nobody can see another agent's files or screen. The only shared things are:
+Nobody can see another agent's files or screen. There are no private messages: everything one agent tells another is on the board, where every agent and the boss can read it and where it survives a restart. The shared things are:
 
 - **The board**, a SQL database (SQLite dialect), through `team sql "<SQL>"`. The function `me()` returns your identity, `{ID}`. The gateway sets it, so it cannot be forged. A request may hold several statements; they run as one transaction, so do not write BEGIN or COMMIT. A statement is cancelled after 5 seconds. You can SELECT, INSERT and UPDATE in the lead's tables, but not delete rows or change the layout.
+- **Messages.** `team msg <agent|all> "<text>"` sends a short message to one agent (`lead` or a helper) or to all; use it for a quick question to one peer, or to answer one. `team inbox` prints your unread messages and marks them read; `team inbox --all` shows every message to or from you again. When you have unread messages, `team status` and `team wait` print a line `unread messages: <n>`: read them before you go on. Messages are stored in the board's table `messages`, which everyone can read and nobody can change. Orders, claims, plans and progress still belong in the board's tables, not in messages.
 - **Git.** Your clone is on your own branch, `agent/{ID}`. Commit there. `team mr "<title>"` publishes your committed HEAD and asks the merge job to land it on `main`; it prints ACCEPTED or REJECTED with the reason. Work counts only when it is ACCEPTED. `git fetch origin main && git merge origin/main` brings in what others have landed.
 
 Run `team help` for the full command list. Check a statement locally before you submit: {CHECK}

@@ -3,8 +3,8 @@
 A skill and a ready-to-run template for setting up a team of Claude Code agents in tmux.
 
 One **lead** and any number of **helpers** each run in their own tmux window and their own
-sandboxed workspace. They never message each other. They coordinate through a shared board
-(a SQL database) and Git, and their work counts only when a merge job has checked it. A
+sandboxed workspace. They coordinate through a shared board (a SQL database) and Git; a
+question to one peer goes through the same door as a message stored on the board, and their work counts only when a merge job has checked it. A
 monitor looks at every command first and can pause the whole team. The agent that sets all
 of this up and supervises it is the **boss**.
 

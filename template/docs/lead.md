@@ -8,9 +8,10 @@ Get all {NSTATE} statements in `STATEMENTS.md` (in your current directory) done.
 
 ## How the team communicates
 
-There is no messaging, and nobody can see another agent's files or screen. The only shared things are:
+Nobody can see another agent's files or screen. There are no private messages: everything one agent tells another is on the board, where every agent and the boss can read it and where it survives a restart. The shared things are:
 
 - **The board**, a SQL database (SQLite dialect), through `team sql "<SQL>"`. The function `me()` returns the caller's identity (`lead`, or a helper's name). The gateway sets it, so it cannot be forged. A request may hold several statements; they run as one transaction, so do not write BEGIN or COMMIT. A statement is cancelled after 5 seconds.
+- **Messages.** `team msg <agent|all> "<text>"` sends a short message to one agent or to all; `team inbox` prints your unread messages and marks them read (`--all` shows every message to or from you). When you have unread messages, `team status` and `team wait` print a line `unread messages: <n>`. The gateway keeps the messages in the board's table `messages`, which already exists when you start: everyone can read it, nobody (you included) can change it. Use messages for quick questions and answers between two agents; your orders, the crews and the to-do list belong in your tables, where a helper that starts late finds them.
 - **Git.** Each agent has a clone on its own branch `agent/<id>`. `team mr "<title>"` publishes the agent's committed HEAD and asks the merge job to land it on `main`. It prints ACCEPTED or REJECTED with the reason. `git fetch origin main` shows what has landed.
 
 Run `team help` for the full command list.
@@ -24,7 +25,7 @@ Run `team help` for the full command list.
    - `subtasks`: the to-do list; the first agent to claim a row owns it
    - `landed`: the log of finished work
 
-   Helpers can SELECT, INSERT and UPDATE in your tables. Only you can create, alter, drop or delete. Use `DEFAULT (me())` for author and owner columns.
+   Helpers can SELECT, INSERT and UPDATE in your tables. Only you can create, alter, drop or delete. Use `DEFAULT (me())` for author and owner columns. The tables `messages` and `message_reads` belong to the gateway (see Messages above); leave them as they are.
 2. **Post your orders in `announce`.** The helpers start by reading that table and know nothing else: not your table layouts, not the working loop. So the orders must contain the columns of each table, how to claim a subtask atomically (one statement: `UPDATE subtasks SET owner = me() ... WHERE id = ... AND owner IS NULL RETURNING id`; a row back means the claim succeeded), and the loop every helper repeats:
    1. read the plan in `notes`
    2. claim a task from `subtasks`
