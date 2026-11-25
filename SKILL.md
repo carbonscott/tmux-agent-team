@@ -108,11 +108,10 @@ every tool call, `tmux` and `claude` stay blocked, and only the merge job moves 
 machine, its private network or a file pauses the team. On Claude Code 2.1.331 a `research`
 session has the `WebFetch` tool itself; where `Agent` is present (`allied`, `open`) Claude Code
 drops it and fetches pages through a `web-fetch` subagent, whose fetches the monitor checks the
-same way. `harness/boss.sh
-status` lists each agent as `<agent>=<profile>`. An agent cannot start `/goal` itself (Claude Code
-treats it as a command typed by a person); put an `open` agent under `/goal` with
-`harness/boss.sh slash <id> "/goal <condition>"`, which `references/goal.md` explains. Not yet
-shown live. `references/design.md` says what is enforced.
+same way. `harness/boss.sh status` lists each agent as `<agent>=<profile>`. An agent cannot
+start `/goal` itself (Claude Code treats it as a command typed by a person); put an `open` agent
+under `/goal` with `harness/boss.sh slash <id> "/goal <condition>"`, which `references/goal.md`
+explains. Not yet shown live. `references/design.md` says what is enforced.
 
 ### 3. Set up
 
@@ -132,7 +131,7 @@ This runs `task/install.sh`, creates the central repository from `task/seed/`, a
     ./launch.sh
     harness/boss.sh trust       # run right after launch; it waits for each agent to start
 
-A new workspace folder makes Claude Code ask whether to trust it, and the agent does not start until someone answers. `boss.sh trust` answers yes in each agent window, waits to see each session running, and reports one line per agent: `answered yes, started`, or that the session did not start. Then look at that window; if the session quit, start it again there with `tmux send-keys -t '=<session>:<id>' "bash $PWD/harness/run-agent.sh <id>" Enter` and run `boss.sh trust` once more. Tell the user you did this.
+A new workspace folder makes Claude Code ask whether to trust it, and the agent does not start until someone answers. `boss.sh trust` answers yes in each agent window, waits to see each session running, and reports one line per agent: `answered yes, started`, or that the session did not start. If it did not, look at that window; if the session quit, start it again there with `tmux send-keys -t '=<session>:<id>' "bash $PWD/harness/run-agent.sh <id>" Enter` and run `boss.sh trust` once more. Tell the user you did this.
 
 Tell the user they can watch with `tmux attach -t <session>`. The windows are `gateway` (request log), `board` (live view of the board), one per agent, and `reminders`. Set `TEAM_REMOTE_CONTROL=1` before `./launch.sh` to start each agent with Remote Control.
 
