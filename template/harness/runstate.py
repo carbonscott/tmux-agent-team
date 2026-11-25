@@ -4,13 +4,22 @@
   runstate.py --resume  check the files a resume relies on, give back the time the run was down,
                         record it in records/resumes.jsonl and print what was done. Used by
                         launch.sh --resume; exits non-zero (and changes nothing) if a check fails.
+  runstate.py --lock    say whether a process holds the gateway's lock on config.json; exit 0 if none
+  runstate.py --stop-gateway   stop every gateway that holds that lock, however it was started
+                        (used by teardown.sh)
+  runstate.py --left    print the process ids whose working directory is in an agent workspace
+
+A gateway holds an exclusive lock (flock) on config.json for as long as it serves, so "the lock
+is free" is the certain test that no gateway is serving this directory.
 
 States: new (never launched), running (its tmux session is up), complete (every statement is
 on main), ended (it ran out of time or stalled, then its session went away), INTERRUPTED
 (started, not complete, not ended, and its session is gone: a crash, a reboot, or a teardown).
 """
+import fcntl
 import json
 import os
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -27,6 +36,59 @@ def num(name):
         return float(open("%s/%s" % (STATE, name)).read().strip())
     except (OSError, ValueError):
         return None
+
+
+CFGFILE = os.path.realpath(R + "/config.json")
+
+
+def lock_state():
+    """("free", []) when no process holds the gateway's lock on config.json, ("held", pids) when
+    one does, (None, []) when that cannot be told."""
+    try:
+        f = open(CFGFILE)
+    except OSError:
+        return None, []
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(f, fcntl.LOCK_UN)
+        return "free", []
+    except BlockingIOError:
+        return "held", lock_holders()
+    except OSError:
+        return None, []
+    finally:
+        f.close()
+
+
+def has_open(pid, path):
+    try:
+        return any(os.path.realpath("/proc/%d/fd/%s" % (pid, fd)) == path for fd in os.listdir("/proc/%d/fd" % pid))
+    except OSError:
+        return False
+
+
+def cmdline(pid):
+    try:
+        return open("/proc/%d/cmdline" % pid).read().split("\0")
+    except OSError:
+        return []
+
+
+def lock_holders():
+    """The processes that hold a flock on config.json: named by /proc/locks, and confirmed by an
+    open file of theirs that is this config.json (an inode number alone could be another file's)."""
+    try:
+        ino = str(os.stat(CFGFILE).st_ino)
+        lines = open("/proc/locks").read().splitlines()
+    except OSError:
+        return []
+    pids = {int(f[4]) for f in (l.split() for l in lines)
+            if len(f) >= 6 and f[1] == "FLOCK" and f[4].isdigit() and f[5].rsplit(":", 1)[-1] == ino}
+    return sorted(p for p in pids if has_open(p, CFGFILE))
+
+
+def is_gateway(pid):
+    return any(a.endswith("gateway.py") for a in cmdline(pid))
 
 
 def session_up():
@@ -156,9 +218,53 @@ def resume():
         print("removed earlier, not restarted: " + " ".join(removed))
 
 
+def stop_gateway():
+    """Stop the gateways that hold this directory's lock. A holder that is not a gateway is left
+    alone: --lock and teardown.sh report it."""
+    lock, holders = lock_state()
+    for p in holders:
+        if is_gateway(p):
+            try:
+                os.kill(p, signal.SIGTERM)
+                print("gateway stopped (pid %d)" % p)
+            except OSError as e:
+                print("gateway (pid %d) not stopped: %s" % (p, e))
+
+
+def left():
+    """Processes still working in an agent workspace (agent sessions take a few seconds to exit)."""
+    ws = os.path.realpath(R + "/ws") + os.sep
+    out = []
+    for p in os.listdir("/proc"):
+        try:
+            if p.isdigit() and (os.readlink("/proc/%s/cwd" % p) + os.sep).startswith(ws):
+                out.append(p)
+        except OSError:
+            pass
+    return out
+
+
+def lock_text():
+    lock, holders = lock_state()
+    if lock == "free":
+        return 0, "free: no process holds the gateway's lock on config.json"
+    if lock is None:
+        return 1, "unknown: the lock on config.json cannot be tested"
+    return 1, "the gateway's lock on config.json is held by %s" % (", ".join(
+        "pid %d (%s)" % (p, " ".join(" ".join(cmdline(p)).split())[:80]) for p in holders) or "a process that cannot be named")
+
+
 if __name__ == "__main__":
     if sys.argv[1:] == ["--resume"]:
         resume()
+    elif sys.argv[1:] == ["--stop-gateway"]:
+        stop_gateway()
+    elif sys.argv[1:] == ["--left"]:
+        print(" ".join(left()))
+    elif sys.argv[1:] == ["--lock"]:
+        rc, text = lock_text()
+        print(text)
+        sys.exit(rc)
     else:
         word, why = classify()
         print("%s: %s" % (word, why))

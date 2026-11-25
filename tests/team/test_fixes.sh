@@ -254,4 +254,26 @@ check "D4 test_gateway.sh: a message with control characters is refused" 'PASS  
 refute "D4 test_gateway.sh: nothing fails" '^FAIL' echo "$out"
 fi
 
+# ---- E: teardown.sh finds the gateway however it was started, and "nothing is still running" is certain
+if want E; then
+mk_workdir lead h1; setup_wd; launch >/dev/null 2>&1
+( cd "$W/harness" && exec python3 -u gateway.py ) > "$TOP/gw-rel.log" 2>&1 & rel=$!
+wait_for 8 test -s "$W/state/heartbeat"
+check "E the gateway records its pid" "^$rel\$" cat "$W/state/gateway.pid"
+out=$(cd "$W" && ./teardown.sh 2>&1)
+sleep 0.5; kill -0 $rel 2>/dev/null && { no "E a gateway started with a relative path is stopped" "$out"; kill $rel; } || ok "E a gateway started with a relative path is stopped"
+check "E and teardown says so" 'gateway stopped' echo "$out"
+check "E then nothing is running" 'nothing from this run is still running' echo "$out"
+wait $rel 2>/dev/null
+# something else holds the gateway's lock: it is not killed, and teardown does not claim nothing runs
+python3 -c "
+import fcntl, sys, time; f = open(sys.argv[1]); fcntl.flock(f, fcntl.LOCK_EX); time.sleep(60)" "$W/config.json" & holder=$!
+sleep 0.5
+out=$(cd "$W" && ./teardown.sh 2>&1)
+refute "E while the lock on config.json is held, teardown does not say nothing is running" 'nothing from this run is still running' echo "$out"
+check "E it names the holder" "config.json.*$holder|$holder.*config.json" echo "$out"
+kill -0 $holder 2>/dev/null && ok "E a lock holder that is not a gateway is not killed" || no "E a lock holder that is not a gateway is not killed"
+kill $holder; wait $holder 2>/dev/null
+fi
+
 finish

@@ -721,6 +721,7 @@ if __name__ == "__main__":
     except OSError:
         sys.exit("another gateway is already serving " + R)
     os.makedirs(STATE + "/ci", exist_ok=True)
+    write_state("gateway.pid", "%d\n" % os.getpid())     # for the boss; teardown.sh trusts the lock itself
     # Put the board into write-ahead mode once, before the agent threads open it. When they
     # raced to do it on a new board, the loser died with "database is locked" and that agent
     # was never answered.
