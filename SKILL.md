@@ -55,12 +55,33 @@ Settings in `config.json`:
 | `budget_min` | Time budget for the run, in minutes |
 | `model`, `effort` | The model and the effort level every agent runs with. An empty `model` means Claude Code's default; `effort` defaults to `medium`. |
 | `session` | Name of the tmux session |
+| `profile`, `agent_profiles` | What every agent may use, and per-agent exceptions: `"agent_profiles": {"h1": "research"}`. Default `sealed`. See "Profiles" below; `setup.sh` refuses a name it does not know. |
 | `task.statements` | Names of the statements |
 | `task.check` | Shell command that checks one statement in the repository root. `{name}` is replaced by the statement's name. Exit status 0 means done. |
 | `task.attempted_if` | Optional path, with `{name}`. A statement is checked once this path exists, and from then on it must pass or the merge is rejected. Without this setting every statement is checked on every merge, and a merge is rejected only if it breaks a statement that was already done. |
 | `task.allowed_paths` | Regular expressions. A merge may change only paths that match one of them. Everything else is frozen. |
 | `task.toolchain_paths` | Extra directories the check must be able to read, beyond `/usr` and `tools/` |
 | `extra_private_paths` | More paths to hide from the agents |
+
+#### Profiles
+
+Each agent's session is started with the tools of its profile, and the monitor refuses every
+tool the profile does not grant. Choose the smallest profile the task needs.
+
+| Profile | Gives the agent | Use it when | What it gives up |
+|---|---|---|---|
+| `sealed` (default) | `Bash`, `Edit`, `Read`, `Write`, `Glob`, `Grep`; slash commands off | The repository and the check are all the task needs | Nothing: this is the tested team |
+| `research` | `sealed` plus `WebSearch`, `WebFetch` | Agents must read documentation or look things up | The team is no longer offline. A page can carry instructions to the agent, and what the agent puts in a search or URL leaves the machine. |
+| `allied` | `research` plus `Agent` (subagents) | An agent has large reading or search jobs to hand off | Whether the monitor sees the tool calls made inside a subagent is unproven, so treat a subagent's work as unmonitored |
+| `open` | `allied` plus `Skill`; slash commands on | An agent should run its own `/goal` or `/loop`, or use skills | The agent sees your installed skills, and `/loop` and `/goal` add a second control loop beside the harness's own |
+
+In every profile: the shell has no network, connectors (MCP servers) are off, a pause refuses
+every tool call, `tmux` and `claude` stay blocked, and only the merge job moves `main`.
+`WebFetch` may fetch only `http` and `https` pages on the public internet; a URL for this
+machine, its private network or a file pauses the team. Known limit: on Claude Code 2.1.331
+a session did not report `WebFetch` and fetched pages through a `web-fetch` subagent, which
+needs `Agent`; if `research` agents cannot fetch pages there, use `allied`. `harness/boss.sh
+status` lists each agent as `<agent>=<profile>`. `references/design.md` says what is enforced.
 
 ### 3. Set up
 
@@ -125,6 +146,7 @@ Paused agents do not restart by themselves; the `say` step is required. Do not c
 | `python3 harness/verify.py` | Checks every statement on a fresh checkout of `main` |
 | `python3 harness/offline_monitor.py` | Summary of the run's records |
 | `./teardown.sh [--archive [DIR] \| --purge]` | Stops the session and the gateway; `--archive` seals the repository and records into one dated file in DIR and then deletes the run's files; `--purge` deletes them without keeping anything |
+| `python3 harness/profiles.py [--list / --check / <agent>]` | Each agent's profile; `--check` validates `config.json` |
 | `team help` | What agents can do: `whoami`, `status`, `sql`, `push`, `mr`, `wait` |
 
 ## If something goes wrong

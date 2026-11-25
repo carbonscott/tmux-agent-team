@@ -6,7 +6,7 @@ Check flags and settings against your own version.
 | Part | Implementation | File |
 |---|---|---|
 | Separate sessions | One `claude` process per tmux window, started with the brief as its first message | `harness/run-agent.sh`, `launch.sh` |
-| Only shell and file tools | `--tools Bash,Edit,Read,Write,Glob,Grep --strict-mcp-config --disable-slash-commands` removes web access, subagents, cross-session messaging and connectors | `harness/run-agent.sh` |
+| Profiles | `--tools` gets the profile's list; `sealed`, `research` and `allied` add `--disable-slash-commands`, `open` leaves it out and adds `Skill`. `--strict-mcp-config` with no server keeps connectors off in every profile. The default, `sealed`, is `--tools Bash,Edit,Read,Write,Glob,Grep`: no web access, subagents, cross-session messaging or connectors | `harness/profiles.py`, `harness/run-agent.sh` |
 | Walls | The shell sandbox, per agent: `denyRead` on the harness, records, state, task files, other workspaces and the rest of the home directory; no network domains | `harness/mk_settings.py` |
 | Door | `team` writes a request file into `.gw/req` in the workspace and waits for the reply in `.gw/resp` | `bin/team` |
 | Board | One SQLite file in `state/`, opened only by the gateway. `me()` is a SQL function the gateway binds per agent; an authorizer limits what helpers may run | `harness/gateway.py` (`Board`) |
@@ -41,5 +41,15 @@ Check flags and settings against your own version.
 - **`setup.sh` hides the home directory** by listing every folder beside the path from the
   home directory down to the work directory, plus common credential files. Add anything
   else in `extra_private_paths`.
+- **`WebFetch` may be missing from a session.** On Claude Code 2.1.331 a session started with
+  `--tools Bash,WebSearch,WebFetch,Agent,Skill` reported Agent, Bash, Skill and WebSearch,
+  and no WebFetch; pages were fetched by a `web-fetch` subagent, which needs `Agent`. The
+  profiles keep `WebFetch` (the name is valid and harmless where absent), so on such a build
+  only `allied` and `open` can fetch pages.
+- **Subagent tool calls and the hook.** It is not known whether `PreToolUse` fires for calls
+  made inside a subagent. `hook.py` records a call that carries `agent_id` or `agent_type`
+  with a `subagent` field, so the first real `allied` run will show it either way.
+- **Tool names the monitor knows:** `WebSearch` (input `query`), `WebFetch` (`url`, `prompt`),
+  `Agent` (`prompt`, `description`, `subagent_type`), `Skill` (`skill`, `args`).
 - **Headless sessions work without tmux.** Two `claude -p` sessions started at once from a
   plain shell both ran. The team has not been run that way.

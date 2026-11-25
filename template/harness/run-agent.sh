@@ -9,11 +9,15 @@ RC=(); [ -n "${TEAM_REMOTE_CONTROL:-}" ] && RC=(--remote-control "team-$A")
 MODEL=$(python3 -c "import json;print(json.load(open('$R/config.json')).get('model') or '')")
 EFFORT=$(python3 -c "import json;print(json.load(open('$R/config.json')).get('effort') or 'medium')")
 [ -n "$MODEL" ] && RC+=(--model "$MODEL")
-# Only a shell and file tools: no web, no subagents, no messaging, no MCP servers.
+# The agent's profile (harness/profiles.py) decides its tools. The default, sealed, is a shell and
+# file tools only: no web, no subagents, no slash commands or skills. No profile has MCP servers.
+read -r PROFILE TOOLS SLASH <<<"$(python3 "$R/harness/profiles.py" "$A")"
+[ -n "$TOOLS" ] || { echo "no profile for $A: check config.json (harness/profiles.py --check)"; exec bash; }
+[ "$SLASH" = slash-on ] || RC+=(--disable-slash-commands)
 # "--" keeps the brief from being read as another tool name.
 claude --name "team-$A" "${RC[@]}" \
   --settings "$R/harness/settings/$A.json" \
   --permission-mode auto --effort "$EFFORT" \
-  --tools Bash,Edit,Read,Write,Glob,Grep --strict-mcp-config --disable-slash-commands \
+  --tools "$TOOLS" --strict-mcp-config \
   -- "$PROMPT"
 echo "[claude exited; shell kept open so the window persists]"; exec bash

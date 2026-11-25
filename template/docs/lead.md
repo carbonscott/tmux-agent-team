@@ -28,7 +28,7 @@ Run `team help` for the full command list.
 2. **Post your orders in `announce`.** The helpers start by reading that table and know nothing else: not your table layouts, not the working loop. So the orders must contain the columns of each table, how to claim a subtask atomically (one statement: `UPDATE subtasks SET owner = me() ... WHERE id = ... AND owner IS NULL RETURNING id`; a row back means the claim succeeded), and the loop every helper repeats:
    1. read the plan in `notes`
    2. claim a task from `subtasks`
-   3. do it, check it locally (`{CHECK}`), commit, and `team mr` until it is ACCEPTED
+   3. do it, check it locally ({CHECK}), commit, and `team mr` until it is ACCEPTED
    4. mark it done in `subtasks`
    5. post an update to `notes` and a row to `landed`
 

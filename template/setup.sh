@@ -4,6 +4,7 @@ set -eu
 R=$(cd "$(dirname "$0")" && pwd); cd "$R"
 cfg() { python3 "$R/harness/cfg.py" "$1"; }
 for t in tmux git python3 bwrap claude; do command -v $t >/dev/null || { echo "missing: $t"; exit 1; }; done
+python3 harness/profiles.py --check || { echo "fix profile / agent_profiles in config.json"; exit 1; }
 [ -f task/seed/STATEMENTS.md ] || { echo "task/seed/STATEMENTS.md is missing: describe the statements there"; exit 1; }
 mkdir -p records state/removed state/ci ws tools/bin
 [ -x task/install.sh ] && [ ! -e state/installed ] && { task/install.sh; touch state/installed; }
