@@ -74,6 +74,16 @@ Check flags and settings against your own version.
   made inside a subagent. `hook.py` records a call that carries `agent_id` or `agent_type`
   with a `subagent` field, so the first real `allied` run will show it either way.
 - **Tool names the monitor knows:** `WebSearch` (input `query`), `WebFetch` (`url`, `prompt`),
-  `Agent` (`prompt`, `description`, `subagent_type`), `Skill` (`skill`, `args`).
+  `Agent` (`prompt`, `description`, `subagent_type`, `run_in_background`), `Skill` (`skill`, `args`),
+  `SubagentHandback` (`message`).
+- **A subagent reports through `SubagentHandback`.** That is the subagent's own tool, so no
+  profile lists it and `--tools` is left as it is. The monitor refused it until the live
+  profiles proof run showed that 0 of 5 subagent reports arrived: `Agent` was useless, and a
+  page fetched by the `web-fetch` subagent never reached the agent. `hook.py` now passes it,
+  and records it, when the profile grants `Agent` and the call comes from inside a subagent
+  (it carries `agent_id` or `agent_type`, as all 17 recorded calls did). Not yet shown live:
+  in an `allied` agent's session, ask for `the Agent tool, subagent_type general-purpose, to
+  run echo handback-ok and report the output`; the reply must arrive, and
+  `records/actions.jsonl` must hold `"tool": "SubagentHandback"` with `"decision": "pass"`.
 - **Headless sessions work without tmux.** Two `claude -p` sessions started at once from a
   plain shell both ran. The team has not been run that way.

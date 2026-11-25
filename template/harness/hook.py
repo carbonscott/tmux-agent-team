@@ -223,7 +223,10 @@ def main():
     def ab(p):
         return p if os.path.isabs(p) else os.path.join(cwd, p)
 
-    if tool not in GRANTED:
+    # A subagent hands its result back to its parent through SubagentHandback, a tool of the
+    # subagent's own. It is passed where the profile grants Agent, and only from inside a subagent.
+    handback = tool == "SubagentHandback" and "Agent" in GRANTED and bool(d.get("agent_id") or d.get("agent_type"))
+    if tool not in GRANTED and not handback:
         deny(d, "tool %s (not in the %s profile)" % (tool, PROFILE), False)
     if tool in ("Edit", "Write", "NotebookEdit"):
         check_write(d, ab(ti.get("file_path") or ti.get("notebook_path") or ""))
@@ -249,7 +252,7 @@ def main():
         check_url(d, str(ti.get("url") or ""))
     elif tool == "Skill" and re.search(r"tmux-agent-team", str(ti.get("skill") or ""), re.I):
         deny(d, "the team skill: an agent may not start another team", False)
-    elif tool not in ("WebSearch", "Agent", "Skill"):
+    elif tool not in ("WebSearch", "Agent", "Skill", "SubagentHandback"):
         deny(d, "tool %s" % tool, False)
     record(d, "pass")
 

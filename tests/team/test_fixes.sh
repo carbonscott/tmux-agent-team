@@ -123,4 +123,23 @@ for f in SKILL.md references/design.md template/docs/helper.md template/docs/lea
 done
 fi
 
+# ---- K: a subagent can hand its result back on allied and open
+if want K; then
+mk_workdir lead h1 h2 h3; setcfg agent_profiles '{"h1": "research", "h2": "allied", "h3": "open"}'; setup_wd
+sub() { rm -f "$W/state/HALT"; echo "{\"tool_name\":\"SubagentHandback\",\"tool_input\":{\"message\":\"done\"},\"cwd\":\"$W/ws/$1\"$2}" | python3 "$W/harness/hook.py" "$1"; }
+IN=',"agent_id":"a1","agent_type":"web-fetch"'
+DENY='"permissionDecision": "deny"'
+refute "K allied: a subagent's SubagentHandback passes" "$DENY" sub h2 "$IN"
+check  "K and is recorded as passed, inside the subagent" '"tool": "SubagentHandback".*"decision": "pass".*"subagent": "web-fetch"' tail -1 "$W/records/actions.jsonl"
+refute "K open: a subagent's SubagentHandback passes" "$DENY" sub h3 "$IN"
+check  "K research (no Agent): refused" "$DENY" sub h1 "$IN"
+check  "K sealed: refused" "$DENY" sub lead "$IN"
+check  "K a SubagentHandback from the main session (no subagent) is refused" "$DENY" sub h2 ""
+halted && no "K a refused SubagentHandback does not pause the team" || ok "K a refused SubagentHandback does not pause the team"
+echo '{"ts": 0, "agent": "h2", "reason": "test"}' > "$W/state/HALT"
+check "K a pause refuses it too" "$DENY" sh -c "echo '{\"tool_name\":\"SubagentHandback\",\"tool_input\":{\"message\":\"x\"},\"cwd\":\"$W/ws/h2\"$IN}' | python3 '$W/harness/hook.py' h2"
+rm -f "$W/state/HALT"
+check "K references/claude-code.md names SubagentHandback" 'SubagentHandback' cat "$REPO/references/claude-code.md"
+fi
+
 finish
