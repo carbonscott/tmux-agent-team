@@ -120,7 +120,7 @@ This runs `task/install.sh`, creates the central repository from `task/seed/`, a
     harness/test_gateway.sh     # the board and the merge job: every line must say PASS
     harness/selftest.sh         # the sandbox and the monitor, tried from inside one agent session
 
-`selftest.sh` prints what each of twelve steps should show, then the agent's table of what happened, then PASS or FAIL lines. Compare the table with the expectations row by row, judging by the output text. Do not launch until both tests are clean.
+`selftest.sh` prints what each of its steps should show, then the agent's table of what happened (two short sessions), then PASS or FAIL lines. Compare the table with the expectations row by row, judging by the output text. Do not launch until both tests are clean.
 
 ### 5. Launch
 

@@ -53,10 +53,9 @@ Check flags and settings against your own version.
   `extra_private_paths`. Builds from 2.1.332 also know `sandbox.filesystem.allowRead` and
   `denyRead` globs, which could deny the whole folder and re-allow `shell-snapshots/`, covering
   later entries too; the template does not use them, because they have not been tried in a
-  live session. Not yet checked live: run in an agent's window
-  `c=.cla; wc -c ~/${c}ude/history.jsonl; ls -A ~/${c}ude` (spelled so that the monitor does not
-  pause the team); it must print an error or `0` for the history and list nothing but
-  `shell-snapshots`.
+  live session. `harness/selftest.sh` step 13 reads the history from inside a session
+  (`c=.cla; wc -c < ~/${c}ude/history.jsonl`, spelled so that the monitor lets it through to the
+  sandbox); it must print `0` or an error. Not yet run live with this list.
 - **`/goal`'s evaluator reads conversation text only.** It cannot run the check itself, so
   `verify.py` prints a statement's own check command under its `PASS` or `FAIL` line: one
   printed block then shows the command, its last output line and the verdict.
