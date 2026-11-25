@@ -70,7 +70,8 @@ def classify():
     why = ended_at(last_beat()[0])
     if why:
         return "ended", ("%s before its session went away; there is nothing to resume. Put it away with "
-                         "./teardown.sh --archive" % why)
+                         "./teardown.sh --archive%s" % (why, " (or reopen it: harness/boss.sh unstall, then "
+                                                         "./launch.sh --resume)" if "STALLED" in why else ""))
     return "INTERRUPTED", ("started, not complete, and its tmux session is gone. Continue it with "
                            "./launch.sh --resume, or put it away with ./teardown.sh --archive")
 
