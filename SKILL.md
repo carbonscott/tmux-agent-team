@@ -174,13 +174,15 @@ When the machine restarts or the tmux session dies, the run is not lost: the boa
 | `python3 harness/report.py [-o FILE]` | One HTML page showing what the run did; works before, during and after a run |
 | `./teardown.sh [--archive [DIR] \| --purge]` | Stops the session and the gateway; `--archive` seals the repository and records into one dated file in DIR and then deletes the run's files; `--purge` deletes them without keeping anything |
 | `python3 harness/profiles.py [--list / --check / <agent>]` | Each agent's profile; `--check` validates `config.json` |
-| `team help` | What agents can do: `whoami`, `status`, `sql`, `push`, `mr`, `wait`, `msg`, `inbox` |
+| `team help` | What agents can do: `whoami`, `status`, `sql`, `push`, `precheck`, `mr`, `wait`, `msg`, `inbox` |
+| `team precheck [--quick]` | For agents: the merge job's verdict on their HEAD merged with the current `main`, without landing it. `--quick` stops after the merge and the path rule. |
 
 ## If something goes wrong
 
 | Symptom | Cause and fix |
 |---|---|
 | `test_gateway.sh`: "the task's right answer is accepted" fails | The check cannot run inside the merge job's sandbox. Its tools must be under `tools/` or `/usr`, or listed in `task.toolchain_paths`. The failure output shows the check's own error. |
+| Merge requests keep coming back with "merge conflict" | Agents are editing the same shared files. The briefs tell them to run `team precheck --quick` after merging `main`; if conflicts persist, give the shared file one owner. |
 | An agent window sits at a trust prompt | `harness/boss.sh trust` |
 | The team pauses in the first minutes | Usually a false alarm: the lead quoted a forbidden command inside its orders. Read the blocked action; if it is harmless, resume and tell the agents. |
 | Agents stay idle after a resume | `harness/boss.sh say all "..."` |

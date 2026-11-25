@@ -12,7 +12,7 @@ Nobody can see another agent's files or screen. There are no private messages: e
 
 - **The board**, a SQL database (SQLite dialect), through `team sql "<SQL>"`. The function `me()` returns the caller's identity (`lead`, or a helper's name). The gateway sets it, so it cannot be forged. A request may hold several statements; they run as one transaction, so do not write BEGIN or COMMIT. A statement is cancelled after 5 seconds.
 - **Messages.** `team msg <agent|all> "<text>"` sends a short message to one agent or to all; `team inbox` prints your unread messages and marks them read (`--all` shows every message to or from you). When you have unread messages, `team status` and `team wait` print a line `unread messages: <n>`. The gateway keeps the messages in the board's table `messages`, which already exists when you start: everyone can read it, nobody (you included) can change it. Use messages for quick questions and answers between two agents; your orders, the crews and the to-do list belong in your tables, where a helper that starts late finds them.
-- **Git.** Each agent has a clone on its own branch `agent/<id>`. `team mr "<title>"` publishes the agent's committed HEAD and asks the merge job to land it on `main`. It prints ACCEPTED or REJECTED with the reason. `git fetch origin main` shows what has landed.
+- **Git.** Each agent has a clone on its own branch `agent/<id>`. `team mr "<title>"` publishes the agent's committed HEAD and asks the merge job to land it on `main`. It prints ACCEPTED or REJECTED with the reason. `team precheck` gives the same verdict without landing anything. `git fetch origin main` shows what has landed.
 
 Run `team help` for the full command list.
 
