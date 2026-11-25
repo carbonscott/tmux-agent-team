@@ -10,6 +10,7 @@ running() { [ -e "$STUB_DIR/session" ] && kill -0 "$GWPID" 2>/dev/null; }
 # ---- refusals: checked before anything is stopped, so the run goes on untouched
 mk_workdir; setup_wd; launch >/dev/null 2>&1; start_gateway
 land h1 a >/dev/null 2>&1
+as h1 team msg h2 "kept in the records" >/dev/null 2>&1; as lead team msg all "and this one" >/dev/null 2>&1
 out=$(cd "$W" && ./teardown.sh --archive "$TOP/no/such/folder" 2>&1); rc=$?
 [ $rc -ne 0 ] && ok "a destination that does not exist is refused" || no "a destination that does not exist is refused" "$out"
 check "and the refusal says why" 'no such folder' echo "$out"
@@ -61,6 +62,8 @@ check "STATUS.txt: an abandoned run with one of three done" '^abandoned run, sto
 check "STATUS.txt names the removed helper" '^removed helpers: +h2$' cat "$s"
 check "STATUS.txt shows the pause and the blocked action" 'sudo ls' cat "$s"
 check "STATUS.txt counts the resumes" '^resumes: +1$' cat "$s"
+check "STATUS.txt counts the messages" '^messages: +2 ' cat "$s"
+check "and the messages themselves are in the archived records" 'kept in the records' cat "$(dirname "$s")/records/gateway.jsonl"
 check "STATUS.txt carries what verify.py said" 'FAIL +b' cat "$s"
 check "STATUS.txt says how to get the work back" 'git clone central.git' cat "$s"
 check "the history is in the archive" 'land a' sh -c "git -C '$(dirname "$s")/central.git' log --format=%s main"

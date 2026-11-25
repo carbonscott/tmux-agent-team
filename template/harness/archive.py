@@ -76,6 +76,13 @@ def status_text(verify_ok, verify_out, stopped):
     removed = sorted(os.listdir(STATE + "/removed")) if os.path.isdir(STATE + "/removed") else []
     flags = [f for f in ("DONE", "HALT", "STALLED") if os.path.exists(STATE + "/" + f)]
     resumes = read(R + "/records/resumes.jsonl").splitlines()
+    sent = 0
+    for line in read(R + "/records/gateway.jsonl").splitlines():
+        if '"op": "msg"' in line:
+            try:
+                sent += json.loads(line).get("code") == 0
+            except ValueError:
+                pass
     lines = [
         head,
         "",
@@ -96,6 +103,7 @@ def status_text(verify_ok, verify_out, stopped):
         "removed helpers:  %s" % (" ".join(removed) or "-"),
         "state at stop:    %s" % (" ".join(flags) or "-"),
         "resumes:          %d" % len([r for r in resumes if r.strip()]),
+        "messages:         %d (team msg; each is in records/gateway.jsonl)" % sent,
     ]
     if "HALT" in flags:
         lines += ["", "The team was paused when it stopped. The blocked action:", read(STATE + "/HALT")[:2000]]
@@ -106,7 +114,8 @@ def status_text(verify_ok, verify_out, stopped):
               "  STATUS.txt    this file",
               "  central.git/  the bare repository; the result is its main branch: git clone central.git <dir>",
               "  records/      every tool call (actions.jsonl), gateway request (gateway.jsonl) and merge",
-              "                (merges.jsonl) of the run, and any reviewed pauses (halt.*.json)",
+              "                (merges.jsonl) of the run, every message (gateway.jsonl, op msg), any",
+              "                reviewed pauses (halt.*.json) and resumes after a crash (resumes.jsonl)",
               ""]
     return "\n".join(lines)
 
