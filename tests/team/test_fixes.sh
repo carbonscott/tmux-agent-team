@@ -594,4 +594,15 @@ check "U and says so" 'dropped' echo "$out"
 ( cd "$W" && python3 harness/from-goal.py "$FIX" --replace-statements ) >/dev/null 2>&1 && no "U --replace-statements without --apply is refused" || ok "U --replace-statements without --apply is refused"
 fi
 
+# ---- V: references/goal.md says what the live boss-under-/goal run showed
+if want V; then
+G=$REPO/references/goal.md
+refute "V goal.md no longer says no boss has run under /goal" 'no boss has run under `/goal`' cat "$G"
+check "V it reports the live run" 'Goal achieved' cat "$G"
+check "V it advises an iteration floor of 1 for a boss contract" -i 'floor of (1|one)' cat "$G"
+check "V it says the loop can be stopped by a safety classifier, so it is not unattended" -i 'classifier' cat "$G"
+refute "V it no longer says the boss uses no subagents" 'the boss uses no subagents' sh -c "tr '\n' ' ' < '$G'"
+check "V it tells the boss to pass DIR to teardown.sh --archive" 'teardown\.sh --archive <' cat "$G"
+fi
+
 finish

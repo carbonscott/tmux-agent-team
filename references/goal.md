@@ -109,8 +109,11 @@ The skipped items are about the runner's own record, not the work, so no agent c
 | The ledger digest | One iteration is one `harness/wait-run.sh 540` cycle: `delegated` is the helpers, `new` is what landed in that cycle |
 
 The contract's `operating_mode` asks the runner to delegate to subagents. With a team, the
-helpers are the delegation, and the boss uses no subagents for the work. Say so in the
-ledger rather than starting subagents to satisfy the wording.
+helpers are the delegation: the boss starts no subagent to do a statement's work, and says
+so in the ledger rather than starting one to satisfy the wording. A subagent that only
+checks (reads the records, clones `main` and runs `verify.py`, compares the claims file with
+`merges.jsonl`) is sensible, and the boss in the live run used such checkers; name them in the
+ledger as checkers, not as delegated work.
 
 ### 4. What to watch for
 
@@ -123,6 +126,18 @@ ledger rather than starting subagents to satisfy the wording.
   print `verify.py`'s output as the gap report, with the ledger digest and the claims file,
   and stop. That is the contract's bounded termination, not a reason to launch a second run.
 - **No new goals mid-run** unless the user approved an envelope for them up front.
+- **Set the iteration floor to 1.** make-goal's ledger item asks for at least N completed
+  iterations (3 in the live run). For a boss contract the merge job is already the checker:
+  in the live run the team was done in 3.0 minutes, and the floor of 3 cost about 13 more
+  minutes of turns that only re-checked a finished result. Write the ledger item with a
+  floor of 1 before you start.
+- **Archive inside the guardrails.** `./teardown.sh --archive` writes beside the work
+  directory by default, which can break a contract's "do not write outside ..." guardrail.
+  Pass the folder: `./teardown.sh --archive <a folder the contract allows>`.
+- **Not unattended.** Claude Code's own safety checks can stop the loop. In the live run's
+  first attempt an API safety classifier stopped the boss seven minutes in, after the team
+  was already done ("Goal paused · send a message to continue"), and it stayed there until a
+  person sent a message. Tell the user to look in on a boss under `/goal`.
 
 ## An agent under `/goal`
 
@@ -177,9 +192,20 @@ harness's Stop hook take turns is unproven.
   merge job moves `main`.
 - Connectors (MCP servers).
 
+## Shown live
+
+A boss under `/goal` (the live goal proof run, template at commit 7caf0a9, Claude Code
+2.1.332): its second attempt reached "Goal achieved" in 21.2 minutes over 3 turns, of which
+the team itself needed 3.0 minutes for 7 of 7 statements; the evaluator quoted `verify.py`'s
+"7 of 7 statements pass" as its evidence. The first attempt was paused by a safety classifier
+after the team was done (see "Not unattended" above). The same run wrote a task from a real
+make-goal contract with `from-goal.py`; its `--apply` then replaced the example's 72-line
+`STATEMENTS.md`, and the team built modules that pass the checks but miss the spec, which is
+why the earlier text is now kept.
+
 ## Not yet shown
 
-No task has been written from a real make-goal contract, no boss has run under `/goal`, and
-no agent has run `/goal` inside the team (`boss.sh slash` is tested with the stub tmux only). `from-goal.py`, `task.checks` and the merge job's
-use of them are shown only by stub-based tests (`tests/accept/goal.sh`,
-`tests/team/test_goal.sh`).
+No agent has run `/goal` inside the team (`boss.sh slash` is tested with the stub tmux only).
+The kept earlier text and the probe handling of `from-goal.py`, the merge job's report
+without `attempted_if`, and `test_gateway.sh` on such a task are tested with stubs only
+(`tests/team/test_fixes.sh`, sections T and U).
