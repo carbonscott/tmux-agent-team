@@ -109,6 +109,15 @@ p=$(rep)
 check "records cut short by a crash do not stop the report" 'RUNNING|PAUSED' echo "$p"
 check "a resume is listed with the time down" '<td>10m 00s</td>' echo "$p"
 check "and drawn as down time" 'class="band down"' echo "$p"
+# a resume record as launch.sh --resume writes it: every field in human terms, no raw epoch numbers
+python3 -c "
+import json, time; t = time.time() - 3
+print(json.dumps(dict(ts=t, down_s=187.8, given_back_s=187.8, last_beat=t - 187.8, beat_from='heartbeat', paused=False,
+      deadline_before=t + 1000, deadline_after=t + 1187.8, removed=['h2'], landed=['a'])))" >> "$W/records/resumes.jsonl"
+rs=$(rep | sed -n '/<h2>Resumes</,/<\/section>/p')
+refute "the resumes table shows no raw epoch numbers or field names" '[0-9]{10}|_s=|last_beat|deadline_after' echo "$rs"
+check "it shows the time given back, then the new deadline as a clock time" '<td>3m 07s</td><td>[0-9]{2}:[0-9]{2}:[0-9]{2}</td>' echo "$rs"
+check "and who was not restarted" 'h2' echo "$rs"
 as h1 team msg h2 "x" >/dev/null 2>&1; as h1 team msg h2 "<i>y</i>" >/dev/null 2>&1; as lead team msg all "z" >/dev/null 2>&1
 p=$(rep)
 check "messages are counted by sender and recipient" '<td>h1</td><td>h2</td><td>2</td>' echo "$p"

@@ -57,11 +57,17 @@ def jfile(path):
 
 
 def clock(t):
-    return time.strftime("%H:%M:%S", time.localtime(t)) if t else "-"
+    try:
+        return time.strftime("%H:%M:%S", time.localtime(float(t))) if t else "-"
+    except (TypeError, ValueError, OverflowError, OSError):
+        return "-"
 
 
 def span(s):
-    s = int(max(0, s or 0))
+    try:
+        s = int(max(0, float(s or 0)))
+    except (TypeError, ValueError, OverflowError):
+        return "-"
     return "%dh %02dm" % (s // 3600, s % 3600 // 60) if s >= 3600 else "%dm %02ds" % (s // 60, s % 60) if s >= 60 \
         else "%ds" % s
 
@@ -307,9 +313,19 @@ def page(g):
                        e(span((p["end"] or NOW) - p["ts"])), e(p.get("agent", "?")), e(p.get("by", "")),
                        e(p.get("tool", "")), "<code>%s</code>" % e(str(what)[:600]), e(p.get("reason", ""))])
     removals = [[e(clock(t)), e(rel(t)), e(a)] for t, a in g["removed"]]
-    resumes = [[e(clock(r.get("ts"))), e(span(r.get("down_s"))),
-                e(", ".join("%s=%s" % (k, v) for k, v in r.items() if k not in ("ts", "down_s"))[:300])]
-               for r in g["resumes"]]
+    resumes = []
+    for r in g["resumes"]:      # a record of launch.sh --resume (runstate.py), in human terms
+        given = "none while paused: given back when the pause was cleared" if r.get("paused") else (
+            span(r["given_back_s"]) if isinstance(r.get("given_back_s"), (int, float)) else "")
+        notes = []
+        if r.get("beat_from") and r.get("beat_from") != "heartbeat":
+            notes.append("last sign of life: " + str(r["beat_from"]))
+        if isinstance(r.get("landed"), list):
+            notes.append("done then: %d of %d" % (len(r["landed"]), len(STATEMENTS)))
+        if r.get("removed"):
+            notes.append("not restarted (removed): " + " ".join(map(str, r["removed"])))
+        resumes.append([e(clock(r.get("ts"))), e(span(r.get("down_s"))), e(clock(r.get("last_beat"))), e(given),
+                        e(clock(r.get("deadline_after"))), e("; ".join(notes))])
     events = []
     if g["stalled"] is not None:
         st = g["stalled"]
@@ -358,7 +374,8 @@ msgs: sent / received.</p></section>
         pauses=table(["paused", "cleared", "length", "agent", "by", "tool", "blocked action", "reason"], pauses,
                      "The team was never paused."),
         removals=table(["time", "since start", "agent"], removals, "Nobody was removed."),
-        resumes=table(["resumed", "down for", "detail"], resumes, "The run was never resumed after a crash."),
+        resumes=table(["resumed", "down for", "last beat before", "time given back", "new deadline", "notes"], resumes,
+                      "The run was never resumed after a crash."),
         pairs=table(["from", "to", "messages"], pairs, "No messages."))
     return "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">\n" \
            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n" \
