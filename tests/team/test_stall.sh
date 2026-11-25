@@ -41,7 +41,7 @@ out=$(as h2 team push 2>&1); rc=$?
 [ $rc -ne 0 ] && grep -q STALLED <<<"$out" && ok "push is refused after a stall" || no "push is refused after a stall" "$rc $out"
 as h1 team status >/dev/null 2>&1; [ $? -eq 4 ] && ok "status still answers, with exit status 4: the run is over" || no "status still answers, with exit status 4: the run is over"
 check "whoami still answers" '^h1$' as h1 team whoami
-check "the reminder loop stops on a stall" 'state/STALLED' cat "$W/harness/remind.sh"
+check "the reminder loop knows about a stall" 'state/STALLED' cat "$W/harness/remind.sh"
 check "offline_monitor.py reports the stall" 'STALLED' sh -c "cd '$W' && python3 harness/offline_monitor.py"
 
 # boss.sh unstall reopens the run with a fresh clock

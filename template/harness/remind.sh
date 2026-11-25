@@ -1,9 +1,11 @@
 #!/bin/bash
-# A time-left reminder typed into the lead's window every 5 minutes.
+# A time-left reminder typed into the lead's window every 5 minutes (TEAM_REMIND_S seconds).
+# Quiet while the team is paused or the run is stalled (boss.sh unstall may reopen it); it stops
+# only when the run is complete or out of time.
 R=$(cd "$(dirname "$0")/.." && pwd); S=$(python3 "$R/harness/cfg.py" session)
-while sleep 300; do
+while sleep "${TEAM_REMIND_S:-300}"; do
   [ -e "$R/state/DONE" ] && { echo "run complete; reminders stop"; break; }
-  [ -e "$R/state/STALLED" ] && { echo "run stalled; reminders stop"; break; }
+  [ -e "$R/state/STALLED" ] && { echo "run stalled; no reminder (boss.sh unstall would reopen it)"; continue; }
   [ -e "$R/state/HALT" ] && { echo "team paused; no reminder"; continue; }
   left=$(python3 -c "import time;print(int((float(open('$R/state/deadline').read())-time.time())//60))")
   [ "$left" -le 0 ] && { echo "time is up"; break; }

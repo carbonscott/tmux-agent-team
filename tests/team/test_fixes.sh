@@ -473,4 +473,18 @@ echo '{"ts": 0, "agent": "h1", "reason": "test"}' > "$W/state/HALT"
 ( cd "$W" && harness/boss.sh status ) >/dev/null 2>&1 && ok "S and when it is paused" || no "S and when it is paused"
 fi
 
+# ---- Q: the lead's reminders come back after boss.sh unstall
+if want Q; then
+mk_workdir lead h1; setup_wd; launch >/dev/null 2>&1
+echo '{"ts": 1, "stall_min": 30}' > "$W/state/STALLED"; : > "$STUB_DIR/calls.log"
+( cd "$W" && TEAM_REMIND_S=1 bash harness/remind.sh ) > "$TOP/remind.out" 2>&1 & pr=$!
+sleep 2.5
+kill -0 $pr 2>/dev/null && ok "Q the reminder loop keeps running while the run is stalled" || no "Q the reminder loop keeps running while the run is stalled" "$(cat "$TOP/remind.out")"
+refute "Q and sends no reminder then" 'send-keys' cat "$STUB_DIR/calls.log"
+( cd "$W" && harness/boss.sh unstall ) >/dev/null
+wait_for 5 grep -q 'Time left' "$STUB_DIR/calls.log" && ok "Q after boss.sh unstall the reminders come back" || no "Q after boss.sh unstall the reminders come back" "$(cat "$TOP/remind.out")"
+date +%s > "$W/state/DONE"
+wait_for 5 sh -c "! kill -0 $pr 2>/dev/null" && ok "Q the loop ends when the run is complete" || { no "Q the loop ends when the run is complete"; kill $pr; }
+fi
+
 finish
