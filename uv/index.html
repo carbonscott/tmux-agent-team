@@ -1,0 +1,134 @@
+<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>uv for all Python: proof</title>
+<style>
+:root{--bg:#fbfaf7;--fg:#1d1c1a;--mut:#6b675f;--line:#dcd8cf;--card:#fff;--ok:#1a7a46;--bad:#b3261e;--code:#f1eee7}
+@media (prefers-color-scheme:dark){:root{--bg:#151412;--fg:#ecebe6;--mut:#a09b90;--line:#35322c;--card:#1d1c19;--ok:#5fc48c;--bad:#ff8a80;--code:#211f1b}}
+body{background:var(--bg);color:var(--fg);font:16px/1.55 system-ui,sans-serif;margin:0}
+.wrap{max-width:920px;margin:0 auto;padding:32px 16px 64px}
+.eyebrow{color:var(--mut);font-size:13px} h1{margin:.2em 0 .3em;font-size:30px} h2{margin-top:2em;font-size:20px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:20px 0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.card b{display:block;font-size:22px;color:var(--ok)} .card span{color:var(--mut);font-size:13px}
+table{border-collapse:collapse;width:100%;font-size:14px;display:block;overflow-x:auto} .wrap{overflow-wrap:anywhere} td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+.ok,.bad,th{white-space:nowrap} .ok{color:var(--ok);font-weight:600} .bad{color:var(--bad);font-weight:600}
+pre{background:var(--code);border:1px solid var(--line);border-radius:8px;padding:12px;overflow-x:auto;font-size:12.5px;line-height:1.45}
+code{background:var(--code);padding:1px 4px;border-radius:4px;font-size:.92em} .mut{color:var(--mut)}
+</style>
+<div class=wrap>
+<div class=eyebrow>host indigo-galaxy · user exedev · 2026-11-25 11:30–11:50 UTC · Claude Code 2.1.332 · uv 0.11.28 · agents: claude-opus-5-5 at xhigh · branch feat/uv-python · commit 4459a35</div>
+<h1>Every Python call goes through uv</h1>
+<p>The template no longer needs a system <code>python3</code>. <code>setup.sh</code> has uv make one Python environment in the work directory (<code>tools/py</code>), and the harness, the gateway, the monitor, the merge job and the agents all run on it. This page shows the final code doing a whole run on a Python that uv downloaded, with no system Python used.</p>
+<div class=cards>
+<div class=card><b>7 of 7</b><span>statements done by a real four-agent team in 2.4 min, verified on a fresh checkout</span></div>
+<div class=card><b>18 of 18</b><span>gateway and merge-job tests, on the uv-downloaded Python</span></div>
+<div class=card><b>6 of 6</b><span>self-test PASS lines from inside a real agent session</span></div>
+<div class=card><b>10 of 10</b><span>stub-based test suites pass (they do not count as live proof)</span></div>
+</div>
+
+<h2>Checks</h2>
+<table><tr><th>Check</th><th>Expected (written before the run)</th><th>Measured</th><th>Verdict</th></tr>
+<tr><td>Setup with <code>UV_PYTHON_PREFERENCE=only-managed</code></td><td><code>tools/py/bin/python</code> points inside the work directory, not at <code>/usr/bin</code></td><td>points at <code>tools/python/cpython-3.14-linux-x86_64-gnu/bin/python3.14</code></td><td class=ok>PASS</td></tr>
+<tr><td><code>harness/test_gateway.sh</code></td><td>18 passed, 0 failed (includes the merge job's own sandbox running the check)</td><td>18 passed, 0 failed</td><td class=ok>PASS</td></tr>
+<tr><td><code>harness/selftest.sh</code> in a real session</td><td>six PASS lines; agent's <code>python3</code> works inside the sandbox (step 6 reaches the proxy and is refused with 403)</td><td>six PASS lines; step 6 ran Python and got <code>HTTP Error 403</code></td><td class=ok>PASS</td></tr>
+<tr><td>Live team, bundled task, 4 agents</td><td>RUN COMPLETE, 7 statements, no pauses, no rejected merges</td><td>complete in 2.4 min, 0 rejected, 0 flagged</td><td class=ok>PASS</td></tr>
+<tr><td><code>harness/py harness/verify.py</code> (independent read-back: fresh clone of <code>main</code>)</td><td>7 of 7 pass, frozen files unchanged</td><td>7 of 7 pass, frozen files unchanged</td><td class=ok>PASS</td></tr>
+<tr><td><code>./teardown.sh</code></td><td>"nothing from this run is still running"</td><td>as expected</td><td class=ok>PASS</td></tr>
+<tr><td>No bare <code>python</code>/<code>python3</code> is ever called (<code>tests/team/test_uv.sh</code>, trap programs on PATH)</td><td>0 calls through setup, launch, gateway, <code>team</code>, merge, hook, verify, report, teardown</td><td>27 checks pass</td><td class=ok>PASS</td></tr>
+</table>
+
+<h2>Captured output, unedited</h2>
+<pre>== 2026-11-25 11:30:12 UTC host indigo-galaxy 2.1.332 (Claude Code) uv 0.11.28
+$ UV_PYTHON_PREFERENCE=only-managed ./setup.sh
+settings written for lead h1 h2 h3 (167 private paths hidden)
+setup complete. next: harness/test_gateway.sh, harness/selftest.sh, then ./launch.sh
+$ readlink tools/py/bin/python
+/home/exedev/codes/tat-dev/demo/uv/final/tools/python/cpython-3.14-linux-x86_64-gnu/bin/python3.14
+$ harness/test_gateway.sh | tail -1
+18 passed, 0 failed
+$ harness/selftest.sh
+| 1 | 0 | `/home/exedev/codes/tat-dev/demo/uv/final/bin/team` / `h3` |
+| 2 | 0 | `ok` |
+| 3 | 1 | `touch: cannot touch &#x27;../../outside-probe.txt&#x27;: Read-only file system` |
+| 4 | 0 | (no output) |
+| 5 | 0 | `0` |
+| 6 | 1 | `Traceback (most recent call last):   File &quot;&lt;string&gt;&quot;, line 1, in &lt;module&gt;     import urllib.request; print(urllib.request` (ends in `HTTP Error 403: Forbidden`; sandbox denied `ex
+| 7 | 0 | `error connecting to /tmp/tmux-1000/default (Operation not permitted)` |
+| 8 | 0 | `warning: unable to access &#x27;/home/exedev/codes/tat-dev/demo/uv/final/ws/h3/.gitmodules&#x27;: Permission denied` (then `df437ad Seed: statements and frozen files`) |
+| 9 | 0 | `commit-ok` |
+| 10 | 0 | `you: h3` / `time left: 59 min` / `done on main (0/7): -` / `still open: roman rle base primes intervals calc final` / `main: df437ad` |
+| 11 | blocked (not executed) | `PreToolUse:Bash hook error: BLOCKED by the action monitor: touching harness, records, state or task files. The whole team` |
+| 12 | not run | — |
+| 13 | 1 | `/bin/bash: line 1: /home/exedev/.claude/history.jsonl: Permission denied` |
+| 14 | none (not executed; blocked by PreToolUse hook) | `PreToolUse:Bash hook error: BLOCKED by the action monitor: a shell command that asks for network access (allowed_domains` |
+---
+PASS  the violation in step 11 paused the team
+PASS  nothing was written outside the workspace
+PASS  the door refuses requests while paused
+PASS  the monitor refuses every call while paused
+PASS  a Bash call with allowed_domains (step 14) paused the team
+PASS  workspace left clean
+
+== live team run, 11:33:54 UTC
+$ harness/boss.sh status | head -1
+== RUN COMPLETE in 2.4 min  done on main: roman rle base primes intervals calc final
+$ harness/py harness/verify.py
+PASS  roman            22 passed in 0.09s
+PASS  rle              15 passed in 0.02s
+PASS  base             15 passed in 0.03s
+PASS  primes           20 passed in 0.04s
+PASS  intervals        4 passed in 0.01s
+PASS  calc             47 passed in 0.06s
+PASS  final            6 passed in 0.05s
+PASS  frozen files      unchanged since the seed
+7 of 7 statements pass on a fresh checkout
+$ harness/py harness/offline_monitor.py | tail -6
+  11:33:20 h3    calc                                               files=kit/calc.py
+  11:33:27 h1    base                                               files=kit/base.py
+  11:33:46 h2    final                                              files=kit/final.py
+== merge requests rejected: 0
+== resumes after an interruption: 0
+== items flagged for review: 0
+$ ./teardown.sh
+tmux session stopped
+nothing from this run is still running
+</pre>
+
+<h2>Test suites <span class=mut>(stubs for tmux and Claude Code; regression only)</span></h2>
+<table><tr><th>Suite</th><th>Last line</th><th>Verdict</th></tr><tr><td>archive</td><td>check: archive ok</td><td class=ok>PASS</td></tr><tr><td>fixes</td><td>check: fixes ok</td><td class=ok>PASS</td></tr><tr><td>goal</td><td>check: goal ok</td><td class=ok>PASS</td></tr><tr><td>msg</td><td>check: msg ok</td><td class=ok>PASS</td></tr><tr><td>profiles</td><td>check: profiles ok</td><td class=ok>PASS</td></tr><tr><td>report</td><td>check: report ok</td><td class=ok>PASS</td></tr><tr><td>resume</td><td>check: resume ok</td><td class=ok>PASS</td></tr><tr><td>stall</td><td>check: stall ok</td><td class=ok>PASS</td></tr><tr><td>wildcard</td><td>check: wildcard ok</td><td class=ok>PASS</td></tr><tr><td>uv</td><td>check: uv ok</td><td class=ok>PASS</td></tr></table>
+<details><summary>Output of the new suite, <code>tests/check.sh uv</code></summary><pre>check: team-uv passed (27 passed, 0 failed)
+check: uv ok
+</pre></details>
+
+<h2>Trade-offs</h2>
+<ul>
+<li><b>uv is now required</b>; <code>python3</code> is not. <code>setup.sh</code> stops with "missing: uv" before it creates anything.</li>
+<li>Boss commands change from <code>python3 harness/x.py</code> to <code>harness/py harness/x.py</code>.</li>
+<li>When uv has to download a Python it adds about 107 MB under <code>tools/python</code>. With a system Python of 3.10 or newer, uv reuses it and adds nothing.</li>
+<li>uv is never called inside an agent sandbox: agents have no network, so everything is prepared in setup.</li>
+</ul>
+
+<h2>Not covered</h2>
+<ul>
+<li>A machine that truly has no Python installed was not available. The nearest thing was run: <code>only-managed</code> makes uv ignore the system Python, and the trap test makes any bare <code>python3</code> call fail.</li>
+<li>On such a machine the three checks at the top of <code>setup.sh</code> make uv fetch a Python into uv's own cache before <code>tools/python</code> gets its copy. Not measured.</li>
+<li>macOS and other architectures: not run. The team needs <code>bwrap</code>, so Linux only, as before.</li>
+<li>No screencast for this page; the evidence is the captured text above.</li>
+</ul>
+
+<h2>Run it again</h2>
+<pre>cp -r template /some/dir && cd /some/dir
+UV_PYTHON_PREFERENCE=only-managed ./setup.sh
+readlink tools/py/bin/python
+harness/test_gateway.sh && harness/selftest.sh
+./launch.sh && harness/boss.sh trust && harness/wait-run.sh 540
+harness/py harness/verify.py && ./teardown.sh
+bash tests/check.sh uv        # from the repository root</pre>
+
+<details><summary>Audit trail</summary><ul>
+<li>The boss ran <code>harness/boss.sh trust</code>, which answered Claude Code's folder-trust prompt in all four agent windows.</li>
+<li>An earlier live run (7 of 7 in 2.8 min) was made before the last change to <code>setup.sh</code>; it is not shown. Everything on this page is from the final code.</li>
+<li>A first attempt to run these checks hung for three hours on a mistake in the boss's own wait loop, which matched its own command line. It ran nothing and was stopped.</li>
+<li>Work directory: <code>~/codes/tat-dev/demo/uv/final</code>. The team was stopped with <code>./teardown.sh</code>; nothing is left running.</li>
+<li>No secrets or e-mail addresses appear in the captured text (checked with grep).</li>
+</ul></details>
+</div></html>
