@@ -471,13 +471,13 @@ def page(g):
     rel = lambda t: ("+" + span(t - t0)) if t0 and t else ""
     # the running time: the budget's clock stops while the team is paused and while the run is down
     run_s, paused_s, down_s = runclock.used(REC, t0, ended(g), F.get("halt")) if t0 else (0, 0, 0)
-    done_when = {}
+    done_at = {}
     for mg in g["merges"]:
         for s in mg.get("landed", []):
-            done_when.setdefault(s, mg)
+            done_at.setdefault(s, mg)
     chips = "".join('<li class="%s" title="%s">%s</li>' % (
         "on" if s in g["landed"] else "off",
-        e("done %s by %s" % (clock(done_when[s]["ts"]), done_when[s].get("agent")) if s in done_when else "not done"), e(s))
+        e("done %s by %s" % (clock(done_at[s]["ts"]), done_at[s].get("agent")) if s in done_at else "not done"), e(s))
         for s in STATEMENTS)
     merges = []
     prev = set()

@@ -527,8 +527,7 @@ mkdir -p "$TOP/u"; tar -xzf "$(echo "$out" | sed -n 's/^archived: //p')" -C "$TO
 check "P the archive's STATUS.txt counts the stalls, reopened ones included" '^stalls: +2 \(1 reopened' cat "$TOP"/u/*/STATUS.txt
 fi
 
-# ---- T: a task from a goal contract (no task.attempted_if) passes its own pre-launch test
-FIX=$REPO/tests/accept/fixtures/contract.json
+# ---- T: a task without task.attempted_if passes its own pre-launch test
 if want T; then
 # (ii) the merge job's report without attempted_if names what passed and what failed
 mk_workdir lead h1 h2; setup_wd
@@ -544,59 +543,33 @@ stop_gateway
 mk_workdir lead h1 h2; setup_wd; launch >/dev/null 2>&1; start_gateway
 check "T2 with attempted_if the report is as before" 'checked: a$' land h1 a
 stop_gateway
-# (i) test_gateway.sh on a task written by from-goal.py, with a probe for one of its statements
+# (i) test_gateway.sh on a task without task.attempted_if and with its own checks, with a probe for one statement
+mk_task() {
 mk_workdir lead h1 h2
-( cd "$W" && python3 harness/from-goal.py "$FIX" --apply --allowed 'out/[a-z]+\.txt' ) > "$TOP/fg.out" 2>&1
+python3 - "$W/config.json" <<'EOF'
+import json, sys
+p = sys.argv[1]; c = json.load(open(p)); t = c["task"]
+t.pop("attempted_if", None)
+t["statements"] = ["alpha", "beta"]
+t["checks"] = {"alpha": "grep -x ok out/alpha.txt", "beta": "grep -x ok out/beta.txt"}
+t["check"] = 'echo "statement {name} has no entry in task.checks" >&2; exit 1'
+t["allowed_paths"] = ["out/[a-z]+\\.txt"]
+json.dump(c, open(p, "w"))
+EOF
 rm -rf "$W/task/probe"; mkdir -p "$W/task/probe/good/out" "$W/task/probe/bad/out"
+}
+mk_task
 echo ok > "$W/task/probe/good/out/alpha.txt"; echo no > "$W/task/probe/bad/out/alpha.txt"
 setup_wd; out=$(cd "$W" && harness/test_gateway.sh 2>&1)
-refute "T1 test_gateway.sh passes on a from-goal task" '^FAIL' echo "$out"
+refute "T1 test_gateway.sh passes on a task without attempted_if" '^FAIL' echo "$out"
 check "T1 the wrong answer is merged but not counted" "PASS  the task's wrong answer is merged but not counted as done" echo "$out"
 check "T1 the right answer is counted" "PASS  the task's right answer is counted as done" echo "$out"
 check "T1 test_gateway.sh resets main to the seed" "^$(cat "$W/state/seed_sha")\$" git -C "$W/central.git" rev-parse main
 # a probe that answers no statement is caught
-mk_workdir lead h1 h2
-( cd "$W" && python3 harness/from-goal.py "$FIX" --apply --allowed 'out/[a-z]+\.txt' ) >/dev/null 2>&1
-rm -rf "$W/task/probe"; mkdir -p "$W/task/probe/good/out" "$W/task/probe/bad/out"
+mk_task
 echo ok > "$W/task/probe/good/out/zzz.txt"; echo no > "$W/task/probe/bad/out/zzz.txt"
 setup_wd
 check "T1 a probe that answers no statement fails the right-answer check" "FAIL  the task's right answer is counted as done" sh -c "cd '$W' && harness/test_gateway.sh"
-# (iii) from-goal.py and the example probe
-mk_workdir lead h1 h2; rm -rf "$W/task/probe"; cp -r "$REPO/template/task/probe" "$W/task/probe"   # the example's: kit/roman.py
-out=$(cd "$W" && python3 harness/from-goal.py "$FIX" --apply --allowed 'out/[a-z]+\.txt' 2>&1)
-refute "T3 a probe whose files the new task freezes is removed" . sh -c "ls -d '$W/task/probe' 2>/dev/null"
-check "T3 and the boss is told to write one" -i 'removed task/probe/.*write' sh -c 'echo "$1" | tr "\n" " "' sh "$out"
-mk_workdir lead h1 h2; rm -rf "$W/task/probe"; mkdir -p "$W/task/probe/good/kit" "$W/task/probe/bad/kit"
-echo x > "$W/task/probe/good/kit/roman.py"; echo y > "$W/task/probe/bad/kit/roman.py"
-out=$(cd "$W" && python3 harness/from-goal.py "$FIX" --apply --allowed 'kit/.*' 2>&1)
-check "T3 a probe the new task allows is kept, and the boss told to confirm it" 'kept task/probe/' echo "$out"
-check "T3 the probe is untouched" '^x$' cat "$W/task/probe/good/kit/roman.py"
-mk_workdir lead h1 h2; rm -rf "$W/task/probe"
-out=$(cd "$W" && python3 harness/from-goal.py "$FIX" --apply --allowed 'out/[a-z]+\.txt' 2>&1)
-check "T3 with no probe the boss is told to write one" 'no task/probe/' echo "$out"
-refute "T3 from-goal.py never writes a probe itself" . sh -c "ls -d '$W/task/probe' 2>/dev/null"
-check "T references/goal.md says what to put in task/probe" 'merged but not counted' cat "$REPO/references/goal.md"
-fi
-
-# ---- U: from-goal.py --apply never drops an existing STATEMENTS.md silently
-if want U; then
-mk_workdir lead h1 h2
-printf '# Statements\n\nThe kit spec: each line is stripped before it is read.\n\n```\n# a shell comment\n```\n' > "$W/task/seed/STATEMENTS.md"
-out=$(cd "$W" && python3 harness/from-goal.py "$FIX" --apply --allowed 'out/[a-z]+\.txt' 2>&1)
-S=$W/task/seed/STATEMENTS.md
-check "U the generated statements come first" 'alpha' head -12 "$S"
-check "U the earlier text is kept below them" 'each line is stripped before it is read' cat "$S"
-check "U under a heading that says what it is" '^## Earlier text of this file' cat "$S"
-check "U its headings are nested under it" '^### Statements' cat "$S"
-check "U a comment inside a code block is left alone" '^# a shell comment' cat "$S"
-check "U --apply says what it did with the earlier text" 'STATEMENTS.md.*kept' sh -c 'echo "$1" | tr "\n" " "' sh "$out"
-( cd "$W" && python3 harness/from-goal.py "$FIX" --apply --allowed 'out/.*' ) >/dev/null 2>&1
-check "U a second --apply keeps the earlier text once, not twice" '^1$' sh -c "grep -c 'each line is stripped' '$S'"
-check "U and writes the new allowed paths" '`out/\.\*`' cat "$S"
-out=$(cd "$W" && python3 harness/from-goal.py "$FIX" --apply --allowed 'out/.*' --replace-statements 2>&1)
-refute "U --replace-statements drops the earlier text" 'each line is stripped' cat "$S"
-check "U and says so" 'dropped' echo "$out"
-( cd "$W" && python3 harness/from-goal.py "$FIX" --replace-statements ) >/dev/null 2>&1 && no "U --replace-statements without --apply is refused" || ok "U --replace-statements without --apply is refused"
 fi
 
 # ---- V: references/goal.md says what the live boss-under-/goal run showed

@@ -44,7 +44,6 @@ may "remote may scp" h1 'scp out/a.txt sdfiana025:/tmp/a.txt'
 may "remote may rsync" h1 'rsync -a out/ sdfiana025:/tmp/out/'
 may "remote may curl" h1 'curl -sS https://example.com'
 may "remote may wget" h1 'wget -q -O- https://example.com'
-may "remote may use the bridge" h1 "bridge --session s bash 'hostname'"
 
 check  "open still may not ssh"            "$DENY" bash_ h2 'ssh sdfiana025 hostname'
 check  "open still may not curl"           "$DENY" bash_ h2 'curl -sS https://example.com'

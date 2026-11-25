@@ -16,7 +16,7 @@ Check flags and settings against your own version.
 | Pre-launch test | `selftest.sh [agent]` runs two short `claude -p` sessions with that agent's settings (Stop hook removed) and its profile's `--tools` and slash setting, from `profiles.py`, as `run-agent.sh` does | `harness/selftest.sh` |
 | Rejoining after a crash | `launch.sh --resume` starts every agent as a new session (`run-agent.sh <id> --resume`) with the rejoining brief from `render.py --resume`; `claude --continue` is not used | `launch.sh`, `harness/runstate.py`, `docs/*-rejoin.md` |
 | Records | Hook and gateway logs in `records/`, which the sandbox hides | `harness/offline_monitor.py` |
-| Goal contracts | A make-goal contract for `/goal` becomes the task (`task.checks`); the boss may run under `/goal` with `verify.py` as its proof | `harness/from-goal.py`, `references/goal.md` |
+| `/goal` | The boss may run under `/goal` with `verify.py` as its proof; an agent with the `skills` knob on is put under `/goal` with `boss.sh slash` | `references/goal.md` |
 
 ## Quirks
 
