@@ -46,8 +46,12 @@ try:
 except (OSError, ValueError):
     done = ""
 if os.path.exists(R + "/state/DONE"):
-    took = (float(open(R + "/state/DONE").read()) - float(open(R + "/state/started").read())) / 60
-    print("== RUN COMPLETE in %.1f min  done on main: %s" % (took, done or "-"))
+    sys.path.insert(0, R + "/harness")
+    import runclock     # running time: the pauses and the time down before a resume do not count
+    run, paused, down = runclock.used(R + "/records", float(open(R + "/state/started").read()),
+                                      float(open(R + "/state/DONE").read()))
+    print("== RUN COMPLETE in %.1f min%s  done on main: %s" % (run / 60, " (clock stopped: paused %.1f min, down %.1f min)"
+                                                               % (paused / 60, down / 60) if paused or down else "", done or "-"))
 else:
     print("== %s  time left: %s min  done on main: %s" % (time.strftime("%H:%M:%S"), left, done or "-"))
 stall_min = json.load(open(R + "/config.json")).get("stall_min") or 0

@@ -153,4 +153,15 @@ check "text on green (statement chips, done labels) has 4.5:1 contrast in both t
   contrast "$TOP/r.html" '.chips li.on' '.m.done'
 check "the state word (COMPLETE, STALLED, PAUSED, RUNNING) has 4.5:1 contrast in both themes" '^ok$' \
   contrast "$TOP/r.html" '.good .s' '.bad .s' '.warn .s' '.live .s'
+# running time: 50 min on the wall, less a reviewed pause (5 min) and the time down before a resume (10 min)
+python3 -c "
+import json, time; b = int(time.time()) - 4000
+open('$W/state/started', 'w').write(str(b)); open('$W/state/DONE', 'w').write(str(b + 3000))
+json.dump(dict(ts=b + 600, agent='h1', reason='test'), open('$W/records/halt.%d.json' % (b + 900), 'w'))
+open('$W/records/resumes.jsonl', 'a').write(json.dumps(dict(ts=b + 1800, down_s=600)) + '\\n')"
+p=$(rep)
+check "the time a run took is its running time: wall time less pauses and time down" '<dt>running time</dt><dd>35m 00s' echo "$p"
+check "the time stopped is stated beside it" 'paused 5m 00s, down 10m 00s' echo "$p"
+check "boss.sh status gives the running time of a finished run" 'RUN COMPLETE in 35.0 min' sh -c "cd '$W' && harness/boss.sh status"
+check "and the time stopped" 'paused 5.0 min, down 10.0 min' sh -c "cd '$W' && harness/boss.sh status"
 finish

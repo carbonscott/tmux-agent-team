@@ -15,6 +15,9 @@ import sqlite3
 import sys
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import runclock  # noqa: E402
+
 R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATE, REC = R + "/state", R + "/records"
 CFG = json.load(open(R + "/config.json"))
@@ -160,6 +163,18 @@ def state_of(g):
     return "RUNNING", "live"
 
 
+def ended(g):
+    """When the run stopped running: it was done or stalled, its time ran out, or it is still going
+    (then now, or the last beat when the gateway is down). Pauses and time down are inside it."""
+    end = g["done_at"] or (g["stalled"] or {}).get("ts")
+    if end is None:
+        paused = any(p["end"] is None for p in g["pauses"])
+        end = NOW if paused or not g["deadline"] else min(NOW, g["deadline"])
+        if g["beat"] and NOW - g["beat"] > 30:
+            end = min(end, g["beat"])
+    return end
+
+
 def window(g):
     t0 = g["started"]
     ends = [g["done_at"], (g["stalled"] or {}).get("ts")]
@@ -265,7 +280,8 @@ def page(g):
     n, m = len(g["landed"]), len(STATEMENTS)
     t0 = g["started"]
     rel = lambda t: ("+" + span(t - t0)) if t0 and t else ""
-    used = ((g["done_at"] or (g["stalled"] or {}).get("ts") or min(NOW, g["deadline"] or NOW)) - t0) if t0 else 0
+    # the running time: the budget's clock stops while the team is paused and while the run is down
+    run_s, paused_s, down_s = runclock.used(REC, t0, ended(g), jfile(STATE + "/HALT")) if t0 else (0, 0, 0)
     done_when = {}
     for mg in g["merges"]:
         for s in mg.get("landed", []):
@@ -335,12 +351,14 @@ def page(g):
     total_msgs = sum(g["msgs"].values())
     pairs = [[e(s), e(r), e(k)] for (s, r), k in sorted(g["msgs"].items())]
     budget = CFG.get("budget_min")
+    stopped = ", ".join(w + " " + span(v) for w, v in (("paused", paused_s), ("down", down_s)) if v >= 1)
     facts = [("done", "%d of %d" % (n, m)), ("state", state),
-             ("time used", span(used) + (" of %s min" % budget if budget else "")),
-             ("merges", "%d accepted, %d rejected" % (len(g["merges"]), len(g["rejected"]))),
-             ("tool calls", str(len(g["acts"]))), ("pauses", str(len(g["pauses"]))),
-             ("removals", str(len(g["removed"]))), ("resumes", str(len(g["resumes"]))),
-             ("messages", str(total_msgs))]
+             ("running time", span(run_s) + (" of %s min" % budget if budget else ""))]
+    facts += [("clock stopped", stopped)] if stopped else []
+    facts += [("merges", "%d accepted, %d rejected" % (len(g["merges"]), len(g["rejected"]))),
+              ("tool calls", str(len(g["acts"]))), ("pauses", str(len(g["pauses"]))),
+              ("removals", str(len(g["removed"]))), ("resumes", str(len(g["resumes"]))),
+              ("messages", str(total_msgs))]
     body = """<header>
 <div><h1>Run report <span class="sess">%(sess)s</span></h1>
 <p class="muted">%(when)s &middot; %(agents)d agents &middot; written %(now)s</p></div>
