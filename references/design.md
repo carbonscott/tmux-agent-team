@@ -189,8 +189,10 @@ lost, such as after a crash.
 `harness/offline_monitor.py` is text for the boss to scan for trouble. `harness/report.py` is
 a page for the owner: it shows at a glance how much was done, a timeline of the run to scale
 (each agent's activity, every merge, block, pause, removal and time down), and the tables
-behind it. It reads `config.json`, `state/` and `records/` and writes nothing else, so it
-can be run at any time. On an archive it reads `records/` alone, and the run's facts from
+behind it. Its time is the running time: pauses and the time down before a resume are given
+back to the deadline, so they are stated beside it and do not count (`harness/runclock.py`;
+`boss.sh status` uses it for "RUN COMPLETE in N min" too). It reads `config.json`, `state/`
+and `records/` and writes nothing else, so it can be run at any time. On an archive it reads `records/` alone, and the run's facts from
 `records/run.json` (or, for an archive older than that, from `STATUS.txt`, which does not say
 the profiles or when a helper was removed). It is one file with no external scripts, styles
 or fonts, so it can be mailed or opened offline, and everything taken from the records is
