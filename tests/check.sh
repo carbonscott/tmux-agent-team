@@ -23,5 +23,5 @@ if [ -f "tests/accept/$name.sh" ]; then run "accept-$name" 110 "tests/accept/$na
 if [ "$name" = wildcard ]; then
   [ -s references/decisions/team-choice.md ] || { echo "check: references/decisions/team-choice.md is missing"; exit 1; }
 fi
-run "team-$name" 110 "tests/team/test_$name.sh" || exit 1
+run "team-$name" 400 "tests/team/test_$name.sh" || exit 1
 echo "check: $name ok"

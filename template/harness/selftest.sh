@@ -91,6 +91,9 @@ echo "$DOOR  the door refuses requests while paused"
 echo "$MON  the monitor refuses every call while paused"
 case ",$TOOLS," in *,Agent,*) echo "$PSUB  a subagent's report was passed by the monitor (step 14)";; esac
 echo "$PNET  a Bash call with allowed_domains (step $S) paused the team"
-( cd "ws/$A" && git status --porcelain | grep -q . ) && echo "FAIL  workspace left dirty" || echo "PASS  workspace left clean"
+( cd "ws/$A" && git log -1 --format=%s | grep -qx selftest ) && echo "FAIL  the commit of step 9 was not undone"
+if ( cd "ws/$A" && git status --porcelain | grep -q . ); then
+  echo "FAIL  workspace left dirty (cleaned now):"; ( cd "ws/$A" && git status --porcelain | sed 's/^/        /'; git reset -q --hard; git clean -qfd )
+else echo "PASS  workspace left clean"; fi
 kill $GW 2>/dev/null; wait $GW 2>/dev/null
-rm -f state/HALT state/selftest.json state/gw-test.log state/deadline state/stall_from state/heartbeat records/*.jsonl outside-probe.txt state/board.db state/board.db-wal state/board.db-shm
+rm -f state/gateway.pid state/HALT state/selftest.json state/gw-test.log state/deadline state/stall_from state/heartbeat records/*.jsonl outside-probe.txt state/board.db state/board.db-wal state/board.db-shm

@@ -54,7 +54,9 @@ Check flags and settings against your own version.
   since only entries that exist can be named): every entry beside the path from the home
   directory down to the work directory (all of them when the work directory is elsewhere),
   every dot-entry of `~` except `.bashrc`, `.profile`, `.bash_profile`, `.bash_logout`,
-  `.local` (user-installed programs on `PATH`) and `.cache` (tool caches), and every entry of
+  `.local/bin`, `.local/lib`, `.local/share/uv`, `.local/share/claude` (user-installed programs)
+  and `.cache/uv`, `.cache/pip` (package caches; add more with `extra_readable_home_paths` in
+  `config.json`), and every entry of
   Claude Code's config folder (`~/.claude`, or `$CLAUDE_CONFIG_DIR`, as `hook.py` reads it)
   except `shell-snapshots/`. That one must stay readable: Claude Code starts every Bash command
   by sourcing a snapshot of the owner's shell from there (functions, options and `PATH`). An

@@ -64,6 +64,7 @@ Settings in `config.json`:
 | `task.allowed_paths` | Regular expressions. A merge may change only paths that match one of them. Everything else is frozen. |
 | `task.toolchain_paths` | Extra directories the check must be able to read, beyond `/usr` and `tools/` |
 | `extra_private_paths` | More paths to hide from the agents |
+| `extra_readable_home_paths` | Paths under the home directory's dot-folders to leave readable, beyond the short built-in list (for example `.cargo/bin`). Everything else there is hidden. |
 
 **From a make-goal contract.** If the user has a contract from the make-goal skill (`.goal/<slug>.json`), let it write the task instead of filling the tables by hand. Only a `deterministic` contract works, and only before `./setup.sh`:
 

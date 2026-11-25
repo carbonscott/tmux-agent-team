@@ -32,17 +32,22 @@ fi
 if want A2; then
 mk_workdir lead h1; setup_wd
 H=$TOP     # a fake home directory that holds the work directory ($TOP/wd)
-mkdir -p "$H/.claude/shell-snapshots" "$H/.claude/projects" "$H/.aws" "$H/.somethingnew" "$H/.local/bin" "$H/.cache"
+mkdir -p "$H/.claude/shell-snapshots" "$H/.claude/projects" "$H/.aws" "$H/.somethingnew" "$H/.local/bin" "$H/.local/share/keys" "$H/.local/share/uv" "$H/.cache/uv" "$H/.cache/gh"
+touch "$H/.gitconfig"
 echo secret > "$H/.claude/history.jsonl"; echo ': ok' > "$H/.claude/shell-snapshots/x.sh"; touch "$H/.bashrc" "$H/.profile" "$H/.claude.json"
 deny_of() { python3 -c "import json,sys; print('\n'.join(json.load(open(sys.argv[1]))['sandbox']['filesystem']['denyRead']))" "$W/harness/settings/h1.json"; }
 ( cd "$W" && env -u CLAUDE_CONFIG_DIR HOME="$H" python3 harness/mk_settings.py ) >/dev/null
 d=$(deny_of)
-for p in .claude/history.jsonl .claude/projects .aws .somethingnew .claude.json stub; do
+for p in .claude/history.jsonl .claude/projects .aws .somethingnew .claude.json .gitconfig .local/share/keys .cache/gh stub; do
   grep -qxF "$H/$p" <<<"$d" && ok "A2 hidden: ~/$p" || no "A2 hidden: ~/$p" "$d"
 done
-for p in .claude/shell-snapshots .claude .bashrc .profile .local .cache wd; do
+for p in .claude/shell-snapshots .claude .bashrc .profile .local .local/bin .local/share .local/share/uv .cache .cache/uv wd; do
   grep -qxF "$H/$p" <<<"$d" && no "A2 left readable: ~/$p" "$d" || ok "A2 left readable: ~/$p"
 done
+check "A2 Git is pointed at an empty global config, since ~/.gitconfig is hidden" '"GIT_CONFIG_GLOBAL": "/dev/null"' cat "$W/harness/settings/h1.json"
+setcfg extra_readable_home_paths '[".cache/gh"]'
+( cd "$W" && env -u CLAUDE_CONFIG_DIR HOME="$H" python3 harness/mk_settings.py ) >/dev/null
+grep -qxF "$H/.cache/gh" <<<"$(deny_of)" && no "A2 extra_readable_home_paths opens a path" "$(deny_of)" || ok "A2 extra_readable_home_paths opens a path"
 refute "A2 the home directory itself is not hidden" "^$H\$" echo "$d"
 # CLAUDE_CONFIG_DIR: that folder is treated like ~/.claude, and ~/.claude is then hidden whole
 mkdir -p "$H/.claude-alt/shell-snapshots"; echo secret > "$H/.claude-alt/history.jsonl"

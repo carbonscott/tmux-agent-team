@@ -4,7 +4,9 @@ Claude Code specific. The sandbox hides (denyRead) the harness, the records, the
 files and the other agents' workspaces, and in the home directory everything except:
 - the folders on the path from the home directory down to this work directory (their other
   entries are hidden; when this folder is not under the home directory, nothing is on the path);
-- SHELL_DOTS, the few dot-entries directly in the home directory that a shell needs;
+- SHELL_DOTS, the few entries under the home directory's dot-folders that a shell and its tools
+  need (the shell's own start files, user-installed programs, the uv and pip caches), plus
+  config.json: extra_readable_home_paths;
 - shell-snapshots/ inside Claude Code's config folder (~/.claude, or $CLAUDE_CONFIG_DIR):
   Claude Code starts every Bash command by sourcing a file from there. Every other entry of that
   folder (history.jsonl, projects/, settings, credentials) is hidden.
@@ -19,11 +21,18 @@ R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 cfg = json.load(open(R + "/config.json"))
 HOME = os.path.expanduser("~")
 PY = shutil.which("python3") or "/usr/bin/python3"
-# Dot-entries of the home directory a sandboxed shell may read. Everything else that starts
-# with a dot there (.ssh, .aws, .config, .gitconfig, .claude.json, histories, anything new) is hidden.
+# What a sandboxed shell may read under the home directory's dot-entries, as paths relative to
+# it. Everything else that starts with a dot there (.ssh, .aws, .config, .gitconfig, .claude.json,
+# histories, the rest of .local and .cache, anything new) is hidden. ~/.gitconfig is among the
+# hidden: Git treats a global config it cannot open as fatal, so the agents' environment points
+# Git at an empty one (GIT_CONFIG_GLOBAL below; each workspace has its own user.name).
 SHELL_DOTS = [".bashrc", ".profile", ".bash_profile", ".bash_logout",   # read when a shell starts
-              ".local",    # programs and Python packages installed for the user (~/.local/bin on PATH)
-              ".cache"]    # caches some tools read (uv, pip)
+              ".local/bin", ".local/lib",   # programs and Python packages installed for the user
+              ".local/share/uv",            # Pythons and tools installed by uv (~/.local/bin links here)
+              ".local/share/claude",        # Claude Code's own program: the shell's rg function runs it
+              ".cache/uv", ".cache/pip"]    # package caches
+SHELL_DOTS += [os.path.relpath(os.path.join(HOME, os.path.expanduser(p)), HOME)
+               for p in cfg.get("extra_readable_home_paths", [])]
 CLAUDE_DIR = os.path.abspath(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(HOME, ".claude"))
 CLAUDE_KEEP = ["shell-snapshots"]   # sourced at the start of every Bash command
 
@@ -75,7 +84,9 @@ for a in cfg["agents"]:
             },
             "network": {"allowedDomains": []},
         },
-        "env": {"CLAUDE_CODE_STOP_HOOK_BLOCK_CAP": "100000"},
+        "env": {"CLAUDE_CODE_STOP_HOOK_BLOCK_CAP": "100000",
+                # ~/.gitconfig is hidden, and Git stops on a global config it cannot open
+                "GIT_CONFIG_GLOBAL": "/dev/null"},
     }
     json.dump(s, open("%s/harness/settings/%s.json" % (R, a), "w"), indent=1)
 print("settings written for %s (%d private paths hidden)" % (" ".join(cfg["agents"]), len(private)))

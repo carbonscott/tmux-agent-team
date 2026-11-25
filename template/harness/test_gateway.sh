@@ -77,7 +77,7 @@ check "requests are logged under the sender's name" "\"agent\": \"$H1\", \"op\":
 
 # reset everything the test touched
 kill $GW 2>/dev/null; wait $GW 2>/dev/null
-rm -f state/board.db state/board.db-wal state/board.db-shm state/c1.out state/c2.out
+rm -f state/gateway.pid state/board.db state/board.db-wal state/board.db-shm state/c1.out state/c2.out
 git -C central.git update-ref refs/heads/main "$(cat state/seed_sha)"; git -C central.git branch -q -D "agent/$H1" 2>/dev/null
 ( cd "$R/ws/$H1" && git fetch -q origin && git reset -q --hard origin/main && git clean -qfd )
 # the probe merge set the stall clock and the gateway beat: neither belongs to a run yet
