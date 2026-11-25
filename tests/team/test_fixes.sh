@@ -348,4 +348,28 @@ rm -rf "$STUB_DIR/panes"; printf ' team-h1 · auto mode\n' > "$STUB_DIR/pane"
 check "B the stub's single pane still works: started without a prompt" 'started without a prompt' sh -c "cd '$W' && harness/boss.sh trust"
 fi
 
+# ---- L3: boss.sh slash types a slash command, as it is, into an open agent's window
+if want L3; then
+mk_workdir lead h1 h2 h3; setcfg agent_profiles '{"h1": "research", "h3": "open"}'; setup_wd; : > "$STUB_DIR/session"
+: > "$STUB_DIR/calls.log"
+check "L3 slash types the line into an open agent's window" 'typed into h3' sh -c "cd '$W' && harness/boss.sh slash h3 '/goal finish statement b, proven by its check'"
+check "L3 with no prefix" 'send-keys -t =[^ ]*:h3 -l /goal finish statement b, proven by its check$' cat "$STUB_DIR/calls.log"
+check "L3 and then Enter" 'send-keys -t =[^ ]*:h3 Enter' cat "$STUB_DIR/calls.log"
+: > "$STUB_DIR/calls.log"
+out=$(cd "$W" && harness/boss.sh slash h1 "/goal x" 2>&1); rc=$?
+[ $rc -ne 0 ] && grep -q 'research' <<<"$out" && grep -q 'open' <<<"$out" && ok "L3 refused for an agent that is not on open, naming its profile" || no "L3 refused for an agent that is not on open, naming its profile" "$rc $out"
+( cd "$W" && harness/boss.sh slash lead "/goal x" ) >/dev/null 2>&1 && no "L3 refused for a sealed agent" || ok "L3 refused for a sealed agent"
+( cd "$W" && harness/boss.sh slash h3 "goal x" ) >/dev/null 2>&1 && no "L3 refused for a line that is not a slash command" || ok "L3 refused for a line that is not a slash command"
+( cd "$W" && harness/boss.sh slash h3 $'/goal x\n/exit' ) >/dev/null 2>&1 && no "L3 refused for more than one line" || ok "L3 refused for more than one line"
+( cd "$W" && harness/boss.sh slash h3 $'/goal \x1b[2K' ) >/dev/null 2>&1 && no "L3 refused for control characters" || ok "L3 refused for control characters"
+( cd "$W" && harness/boss.sh slash all "/goal x" ) >/dev/null 2>&1 && no "L3 refused for all" || ok "L3 refused for all"
+refute "L3 nothing was typed by a refusal" 'send-keys' cat "$STUB_DIR/calls.log"
+( cd "$W" && harness/boss.sh remove h3 ) >/dev/null
+( cd "$W" && harness/boss.sh slash h3 "/goal x" ) >/dev/null 2>&1 && no "L3 refused for a removed agent" || ok "L3 refused for a removed agent"
+( cd "$W" && harness/boss.sh say h1 "hello" ) >/dev/null
+check "L3 say still marks the boss's text" 'send-keys -t =[^ ]*:h1 -l \[boss\] hello' cat "$STUB_DIR/calls.log"
+check "L3 SKILL.md documents boss.sh slash" 'boss.sh slash' cat "$REPO/SKILL.md"
+check "L3 references/goal.md says how an open agent is put under /goal" 'boss.sh slash' cat "$REPO/references/goal.md"
+fi
+
 finish

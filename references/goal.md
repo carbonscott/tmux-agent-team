@@ -102,9 +102,23 @@ ledger rather than starting subagents to satisfy the wording.
 
 ## An agent under `/goal`
 
-On the `open` profile an agent has slash commands, skills and subagents, so it may start
+On the `open` profile an agent has slash commands, skills and subagents, so it may run under
 `/goal` in its own session for its own part of the work. It is allowed, not expected:
 nothing in the briefs asks for it.
+
+An agent cannot start `/goal` by itself. In the live profiles proof run (Claude Code 2.1.331)
+an `open` agent that tried was told "goal is a UI command, not a skill" before the monitor
+was reached: `/goal` is typed into the session's prompt. `boss.sh say` cannot type it either,
+because it puts `[boss] ` in front. So the boss puts an agent under `/goal` with
+
+    harness/boss.sh slash <id> "/goal <condition>"
+
+which types that one line as it is and presses Enter. It is refused for an agent whose profile
+is not `open`, for a removed agent, for `all`, and for anything but one line of printable text
+that starts with `/`. Agree the condition with the user first (see "Done means merged" below),
+and treat it like any other message to the team: facts and a bound, not hints about the work.
+Not yet shown live: no agent has been put under `/goal` this way, and how its loop and the
+harness's Stop hook take turns is unproven.
 
 - **Done means merged.** The agent's condition should be "`team mr` printed ACCEPTED for
   `<statement>`" (or `team status` lists it as done), not only that a local check passed.
@@ -140,6 +154,6 @@ nothing in the briefs asks for it.
 ## Not yet shown
 
 No task has been written from a real make-goal contract, no boss has run under `/goal`, and
-no agent has run `/goal` inside the team. `from-goal.py`, `task.checks` and the merge job's
+no agent has run `/goal` inside the team (`boss.sh slash` is tested with the stub tmux only). `from-goal.py`, `task.checks` and the merge job's
 use of them are shown only by stub-based tests (`tests/accept/goal.sh`,
 `tests/team/test_goal.sh`).

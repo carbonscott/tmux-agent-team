@@ -108,7 +108,10 @@ every tool call, `tmux` and `claude` stay blocked, and only the merge job moves 
 machine, its private network or a file pauses the team. Known limit: on Claude Code 2.1.331
 a session did not report `WebFetch` and fetched pages through a `web-fetch` subagent, which
 needs `Agent`; if `research` agents cannot fetch pages there, use `allied`. `harness/boss.sh
-status` lists each agent as `<agent>=<profile>`. `references/design.md` says what is enforced.
+status` lists each agent as `<agent>=<profile>`. An agent cannot start `/goal` itself (Claude Code
+treats it as a command typed by a person); put an `open` agent under `/goal` with
+`harness/boss.sh slash <id> "/goal <condition>"`, which `references/goal.md` explains. Not yet
+shown live. `references/design.md` says what is enforced.
 
 ### 3. Set up
 
@@ -188,7 +191,7 @@ When the machine restarts or the tmux session dies, the run is not lost: the boa
 | `./launch.sh` | Starts the tmux session and the run clock |
 | `./launch.sh --resume` | Continues an interrupted run: same board and `main`, time down given back |
 | `harness/wait-run.sh [seconds]` | Blocks until the run completes, stalls, pauses, or times out |
-| `harness/boss.sh status / trust / say <id or all> "<text>" / messages / resume / unstall / remove <id> / end` | The boss's controls. `messages` prints every message the agents sent each other; `unstall` reopens a stalled run. |
+| `harness/boss.sh status / trust / say <id or all> "<text>" / slash <id> "/<command>" / messages / resume / unstall / remove <id> / end` | The boss's controls. `messages` prints every message the agents sent each other; `slash` types a slash command into an `open` agent's window; `unstall` reopens a stalled run. |
 | `python3 harness/verify.py` | Checks every statement on a fresh checkout of `main` |
 | `python3 harness/from-goal.py <contract> [--apply --allowed <regex> ...]` | Turns a make-goal contract into the task, before `setup.sh` |
 | `python3 harness/offline_monitor.py` | Summary of the run's records |
