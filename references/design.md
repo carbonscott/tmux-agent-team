@@ -36,6 +36,9 @@ orders are, which keeps the briefs short and shows that the board carries everyt
   own escape hatches (skipped tests, suppressed errors).
 - **Give every shared file one owner.** A file several statements must change is either
   prepared by the boss before launch or assigned to exactly one statement.
+- **A check speaks through its exit status.** The merge job reads nothing else. A proof
+  that only prints (`wc -l`, `cat`) convinces a reader, not the merge job; `from-goal.py`
+  warns about such commands in a goal contract.
 - **Know how strong the check is.** A proof checker cannot be satisfied by a wrong proof.
   A test suite can be passed by wrong code.
 - **Size it.** If one agent could finish in a few minutes, the team exercises nothing.
@@ -47,6 +50,9 @@ orders are, which keeps the briefs short and shows that the board carries everyt
 | Writes outside the workspace, reading other workspaces or the harness, network access, reaching tmux | Enforced for shell commands by the sandbox (tested from inside an agent session) |
 | Board permissions, statement time limit, atomic claims, one transaction per request | Enforced by the gateway (tested) |
 | Only checked work reaches `main`; frozen paths; no direct pushes | Enforced by the merge job (tested) |
+| A statement's own check (`task.checks`) | Enforced by the merge job and `verify.py` exactly like `task.check`; shown only by stub-based tests |
+| A task written from a make-goal contract (`from-goal.py`) | Only the conversion is checked: refused for exploratory contracts, for contracts with no command, and after `setup.sh`. Whether each item's command really proves the item is the boss's judgement. |
+| The boss under `/goal`, or an agent's own `/goal` on the `open` profile | Requested only (`references/goal.md`). The harness does not see the goal loop; it sees the tool calls and merges it causes. |
 | Pause on a rule violation | Enforced by the hook (tested) |
 | Pause when the model classifier denies an action | Built, never triggered in a run |
 | Paths given to the file tools (Read, Edit, Write, Glob, Grep) | Checked by fixed rules in `hook.py` only; never exercised, since agents used the shell |
@@ -70,6 +76,9 @@ five-minute reminder, a slow check, a helper dying mid-task, teams larger than f
 resuming a run after a real crash (`launch.sh --resume` has run only against stub tmux and
 claude), archiving a real run (`teardown.sh --archive`), and the run report (`report.py`) on a
 real run's records.
+
+A task written from a goal contract, a boss running under `/goal`, and an agent running
+`/goal` inside the team have not been exercised either.
 
 ## Resuming after a crash
 

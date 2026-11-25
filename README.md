@@ -42,9 +42,10 @@ Four agents finish it in about two minutes.
 | `template/` | The team, ready to copy: gateway and merge job, monitor hooks, briefs, scripts, and the example task under `template/task/` |
 | `references/design.md` | Why each part exists, what is enforced and what is only requested, how to adapt it |
 | `references/claude-code.md` | Which Claude Code feature implements each part, and its quirks |
+| `references/goal.md` | A make-goal contract as the team's task, and the boss under `/goal` |
 
 Your own task plugs in through `template/task/` and the `task` section of
-`template/config.json`: a list of statements, one check command, and the paths agents may
+`template/config.json`: a list of statements, one check command (or one per statement), and the paths agents may
 change. Nothing else in the template is specific to the example.
 
 ## Evidence
@@ -67,7 +68,8 @@ places where the runbook was vague, and those were fixed before publishing.
 **Not yet shown.** The example task is easy, so no run has had to split a task, move a
 helper between crews, reach the five-minute reminder, or survive a helper dying. The model
 classifier has never blocked anything. No team larger than four has been run, and no task
-other than the example.
+other than the example. No task has been written from a make-goal contract, and no boss
+has run under `/goal`.
 
 ## Limits
 

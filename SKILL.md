@@ -58,10 +58,18 @@ Settings in `config.json`:
 | `profile`, `agent_profiles` | What every agent may use, and per-agent exceptions: `"agent_profiles": {"h1": "research"}`. Default `sealed`. See "Profiles" below; `setup.sh` refuses a name it does not know. |
 | `task.statements` | Names of the statements |
 | `task.check` | Shell command that checks one statement in the repository root. `{name}` is replaced by the statement's name. Exit status 0 means done. |
+| `task.checks` | Optional map from a statement's name to its own check command, used exactly as written (no `{name}`). A statement in the map is checked with its command, the others with `task.check`. The merge job, `verify.py` and the briefs all follow it. |
 | `task.attempted_if` | Optional path, with `{name}`. A statement is checked once this path exists, and from then on it must pass or the merge is rejected. Without this setting every statement is checked on every merge, and a merge is rejected only if it breaks a statement that was already done. |
 | `task.allowed_paths` | Regular expressions. A merge may change only paths that match one of them. Everything else is frozen. |
 | `task.toolchain_paths` | Extra directories the check must be able to read, beyond `/usr` and `tools/` |
 | `extra_private_paths` | More paths to hide from the agents |
+
+**From a make-goal contract.** If the user has a contract from the make-goal skill (`.goal/<slug>.json`), let it write the task instead of filling the tables by hand. Only a `deterministic` contract works, and only before `./setup.sh`:
+
+    python3 harness/from-goal.py .goal/<slug>.json                          # prints the plan, writes nothing
+    python3 harness/from-goal.py .goal/<slug>.json --apply --allowed 'out/.*'   # writes config.json and task/seed/STATEMENTS.md
+
+Each `done_when` item that names a command in backticks becomes a statement, checked by that command (`task.checks`). Items without one (the contract's claims and ledger items) are listed under `skipped`: they stay yours. Read every warning: a check such as `wc -l` exits 0 whatever it prints, so the merge job would accept anything; rewrite it in `config.json`. Turn the contract's guardrails into `--allowed` patterns yourself. Then fill `task/seed/`, `task/install.sh` and `task/probe/` as the first table says. To run yourself under `/goal` while the team works, and for an agent that runs `/goal` itself, read `references/goal.md` first.
 
 #### Profiles
 
@@ -112,7 +120,7 @@ Run the wait command as a background job, so that you stay reachable and are wok
     harness/wait-run.sh 540     # exits when the run completes, pauses or times out, or after 540 s
     harness/boss.sh status      # one-line state of the run, at any time
 
-The first line `wait-run.sh` prints is `DONE`, `HALT`, `TIME UP` or `STILL RUNNING`. On `STILL RUNNING`, start it again.
+The first line `wait-run.sh` prints is `DONE`, `HALT`, `TIME UP` or `STILL RUNNING`. On `STILL RUNNING`, start it again. If you run under `/goal`, each turn is one round of this step (`references/goal.md`).
 
 If it returns **HALT**, the monitor blocked something and the whole team is paused. `boss.sh status` shows the blocked action. Read it in full, then:
 
@@ -161,6 +169,7 @@ When the machine restarts or the tmux session dies, the run is not lost: the boa
 | `harness/wait-run.sh [seconds]` | Blocks until the run completes, pauses, or times out |
 | `harness/boss.sh status / trust / say <id or all> "<text>" / messages / resume / remove <id> / end` | The boss's controls. `messages` prints every message the agents sent each other. |
 | `python3 harness/verify.py` | Checks every statement on a fresh checkout of `main` |
+| `python3 harness/from-goal.py <contract> [--apply --allowed <regex> ...]` | Turns a make-goal contract into the task, before `setup.sh` |
 | `python3 harness/offline_monitor.py` | Summary of the run's records |
 | `python3 harness/report.py [-o FILE]` | One HTML page showing what the run did; works before, during and after a run |
 | `./teardown.sh [--archive [DIR] \| --purge]` | Stops the session and the gateway; `--archive` seals the repository and records into one dated file in DIR and then deletes the run's files; `--purge` deletes them without keeping anything |
@@ -184,3 +193,4 @@ When the machine restarts or the tmux session dies, the run is not lost: the boa
 
 - `references/design.md`: why each part exists, what is enforced and what is only requested, and how to adapt the design to a different environment.
 - `references/claude-code.md`: which Claude Code feature implements each part, and its quirks.
+- `references/goal.md`: a make-goal contract as the team's task, the boss under `/goal` (its proof is the output of `harness/verify.py`), and an agent that runs `/goal` for its own part.
