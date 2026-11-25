@@ -305,6 +305,26 @@ def do_mr(agent, title):
             git("worktree", "prune", cwd=CENTRAL)
 
 
+# -------------------------------------------------------------------- watch
+def beat():
+    """Write the time of this beat to state/heartbeat. After a crash, launch.sh --resume reads it
+    to learn how long the run was down."""
+    tmp = STATE + "/heartbeat.tmp"
+    with open(tmp, "w") as f:
+        f.write("%.3f\n" % time.time())
+    os.rename(tmp, STATE + "/heartbeat")
+
+
+def watch():
+    """The gateway's main thread: every 2 s, the checks that do not wait for a request."""
+    while True:
+        try:
+            beat()
+        except OSError as e:
+            print("heartbeat not written: %s" % e, flush=True)
+        time.sleep(2)
+
+
 # -------------------------------------------------------------------- serve
 def handle(agent, board, req):
     op = str(req.get("op"))
@@ -400,5 +420,4 @@ if __name__ == "__main__":
     print("gateway up for agents:", " ".join(AGENTS), flush=True)
     for a in AGENTS:
         threading.Thread(target=serve, args=(a,), daemon=True).start()
-    while True:
-        time.sleep(3600)
+    watch()
