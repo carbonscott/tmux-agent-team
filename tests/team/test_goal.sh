@@ -76,6 +76,7 @@ print('ok')"
 
 # A mixed task: b has its own check (with shell braces, used as written), a and c use task.check.
 mk_workdir lead h1 h2
+setcfg agent_profiles '{"h2": "open"}'
 setcfg task.checks '{"b": "test \"$(cat out/b.txt)\" = yes && awk '"'"'{ n++ } END { exit n == 1 ? 0 : 1 }'"'"' out/b.txt"}'
 check "the brief keeps one command when there is no task.checks" '`grep -qx ok out/<name>.txt`' \
   sh -c "cd '$W' && python3 harness/render.py h1"
@@ -94,6 +95,19 @@ v=$(cd "$W" && python3 harness/verify.py 2>&1)
 check "verify.py shows the command it ran for b" 'check: test "\$\(cat out/b.txt\)" = yes' echo "$v"
 refute "and only for statements with their own check" 'check: grep' echo "$v"
 check "verify.py fails the open statement" 'FAIL  c' echo "$v"
+check "a rejoining agent's brief keeps the list of checks" '`b`: `test "\$\(cat out/b.txt\)" = yes' \
+  sh -c "cd '$W' && python3 harness/render.py h1 --resume"
+
+# An agent on the open profile may run /goal in its own session, never start another one.
+hook() { rm -f "$W/state/HALT"; echo "{\"tool_name\":\"$1\",\"tool_input\":$2,\"cwd\":\"$W/ws/h2\"}" \
+  | python3 "$W/harness/hook.py" h2; }
+DENY='"permissionDecision": "deny"'
+refute "an open agent may use the make-goal skill"                "$DENY" hook Skill '{"skill":"make-goal"}'
+check  "but not the team skill"                                   "$DENY" hook Skill '{"skill":"tmux-agent-team"}'
+check  "nor start a goal in a new tmux session"                   "$DENY" hook Bash '{"command":"tmux new-session -d -s g x"}'
+check  "nor start another Claude Code session"                    "$DENY" hook Bash '{"command":"claude -p x"}'
+check  "nor run make-goal's launcher"                             "$DENY" hook Bash '{"command":"bash ~/.claude/skills/make-goal/scripts/launch-tmux.sh .goal/x.json"}'
+rm -f "$W/state/HALT"
 check "from-goal.py refuses this work directory now that setup.sh has run" 'setup.sh has already run' \
   sh -c "cd '$W' && python3 harness/from-goal.py '$FIX' --apply --allowed 'out/.*'"
 finish

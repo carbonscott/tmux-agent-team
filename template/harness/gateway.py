@@ -30,6 +30,7 @@ TASK = CFG["task"]
 AGENTS = CFG["agents"]
 STATEMENTS = TASK["statements"]
 ALLOWED = [re.compile(p) for p in TASK["allowed_paths"]]
+STALL_MIN = float(CFG.get("stall_min") or 0)       # 0 or absent: never stall
 CENTRAL = R + "/central.git"
 STATE = R + "/state"
 DBFILE = STATE + "/board.db"
@@ -69,6 +70,22 @@ def halted():
         return None
 
 
+def stalled():
+    """The contents of state/STALLED once the run has stalled, else None."""
+    try:
+        return json.load(open(STATE + "/STALLED"))
+    except ValueError:
+        return {}
+    except OSError:
+        return None
+
+
+def stall_msg():
+    s = stalled() or {}
+    return ("STALLED: no merge was accepted for %s min (stall_min), so the run has ended. Work on main stays. "
+            "Stop working." % s.get("stall_min", "?"))
+
+
 def landed():
     try:
         return json.load(open(STATE + "/landed.json"))
@@ -85,6 +102,8 @@ def status_text(agent):
     lines.append("main: %s" % git("rev-parse", "--short", "refs/heads/main", cwd=CENTRAL)[1])
     if os.path.exists(STATE + "/DONE"):
         lines.append("RUN COMPLETE: every statement is on main. You may stop.")
+    elif stalled() is not None:
+        lines.append(stall_msg())
     elif left is not None and left <= 0:
         lines.append("TIME IS UP: the run has ended. Stop working.")
     return "\n".join(lines)
@@ -348,6 +367,8 @@ def do_mr(agent, title):
     if code:
         return code, msg
     with MERGE_LOCK:
+        if stalled() is not None:
+            return 1, msg + "\nREJECTED: " + stall_msg()
         _, main = git("rev-parse", "refs/heads/main", cwd=CENTRAL)
         if git("merge-base", "--is-ancestor", head, main, cwd=CENTRAL)[0] == 0:
             return 1, msg + "\nREJECTED: nothing new, your HEAD is already contained in main."
@@ -380,6 +401,7 @@ def do_mr(agent, title):
             with open(STATE + "/landed.json.tmp", "w") as f:
                 json.dump(passing, f)
             os.rename(STATE + "/landed.json.tmp", STATE + "/landed.json")
+            write_state("stall_from", str(time.time()))
             with LOG_LOCK:
                 with open(R + "/records/merges.jsonl", "a") as f:
                     f.write(json.dumps(dict(ts=round(time.time(), 3), agent=agent, title=safe_title, head=head,
@@ -497,6 +519,40 @@ def beat():
     os.rename(tmp, STATE + "/heartbeat")
 
 
+def write_state(name, text):
+    with open(STATE + "/" + name + ".tmp", "w") as f:
+        f.write(text)
+    os.rename(STATE + "/" + name + ".tmp", STATE + "/" + name)
+
+
+def check_stall():
+    """Write state/STALLED when no merge has been accepted for stall_min minutes. The clock counts
+    from state/stall_from: launch.sh sets it, every accepted merge resets it, and boss.sh resume and
+    launch.sh --resume move it later by the time the team was paused or down, so neither counts.
+    A run that was never launched, is complete, paused or out of time does not stall. A merge
+    that is being checked when the limit passes gets its answer first."""
+    if STALL_MIN <= 0 or stalled() is not None or os.path.exists(STATE + "/DONE") or halted():
+        return
+    left = time_left()
+    try:
+        since = float(open(STATE + "/stall_from").read())
+    except (OSError, ValueError):
+        return
+    idle = time.time() - since
+    if left is None or left <= 0 or idle < STALL_MIN * 60:
+        return
+    if not MERGE_LOCK.acquire(blocking=False):
+        return
+    try:
+        if os.path.exists(STATE + "/DONE") or since != float(open(STATE + "/stall_from").read()):
+            return
+        write_state("STALLED", json.dumps(dict(ts=round(time.time(), 3), stall_min=CFG.get("stall_min"),
+                                               idle_s=round(idle), since=since, landed=landed())))
+        print("%s STALLED: no merge accepted for %d s" % (time.strftime("%H:%M:%S"), idle), flush=True)
+    finally:
+        MERGE_LOCK.release()
+
+
 def watch():
     """The gateway's main thread: every 2 s, the checks that do not wait for a request."""
     while True:
@@ -504,6 +560,10 @@ def watch():
             beat()
         except OSError as e:
             print("heartbeat not written: %s" % e, flush=True)
+        try:
+            check_stall()
+        except (OSError, ValueError) as e:
+            print("stall check failed: %s" % e, flush=True)
         time.sleep(2)
 
 
@@ -518,6 +578,8 @@ def handle(agent, board, req):
         return 3, "You have been removed from the team by the boss. Stop working.", op
     if op == "whoami":
         return 0, agent, op
+    if stalled() is not None and op != "status":
+        return 3, stall_msg(), op
     if op == "status":
         n = board.unread()
         return 0, status_text(agent) + ("\nunread messages: %d (read them: team inbox)" % n if n else ""), op

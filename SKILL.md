@@ -20,7 +20,7 @@ How the team works:
 - Agents coordinate only through a shared board (a SQL database) and a Git repository, both reached through one command, `team`. There are no private messages: everything one agent tells another is on the board, where every agent and the boss can read it, and where it survives a restart. A quick question to one peer goes through the gateway as a message (`team msg`), stored on the board and logged under its true sender.
 - Work counts only when the merge job accepts it onto `main`, and the merge job runs your check.
 - A monitor looks at every command before it runs. A violation pauses the whole team until you have reviewed it.
-- Nobody stops until every statement is done or time runs out.
+- Nobody stops until every statement is done, time runs out, or the run stalls (no merge accepted for `stall_min`).
 
 ## Requirements
 
@@ -52,7 +52,8 @@ Settings in `config.json`:
 | Setting | Meaning |
 |---|---|
 | `agents` | Names of the agents. One must be `lead`; every other name is a helper. Any number. |
-| `budget_min` | Time budget for the run, in minutes |
+| `budget_min` | Time budget for the run, in minutes. A ceiling: see "Time" below. |
+| `stall_min` | Minutes without an accepted merge after which the run ends as `STALLED` (fractions allowed; `0` or absent switches it off). The template sets 30. |
 | `model`, `effort` | The model and the effort level every agent runs with. An empty `model` means Claude Code's default; `effort` defaults to `medium`. |
 | `session` | Name of the tmux session |
 | `profile`, `agent_profiles` | What every agent may use, and per-agent exceptions: `"agent_profiles": {"h1": "research"}`. Default `sealed`. See "Profiles" below; `setup.sh` refuses a name it does not know. |
@@ -70,6 +71,23 @@ Settings in `config.json`:
     python3 harness/from-goal.py .goal/<slug>.json --apply --allowed 'out/.*'   # writes config.json and task/seed/STATEMENTS.md
 
 Each `done_when` item that names a command in backticks becomes a statement, checked by that command (`task.checks`). Items without one (the contract's claims and ledger items) are listed under `skipped`: they stay yours. Read every warning: a check such as `wc -l` exits 0 whatever it prints, so the merge job would accept anything; rewrite it in `config.json`. Turn the contract's guardrails into `--allowed` patterns yourself. Then fill `task/seed/`, `task/install.sh` and `task/probe/` as the first table says. To run yourself under `/goal` while the team works, and for an agent that runs `/goal` itself, read `references/goal.md` first.
+
+#### Time
+
+`budget_min` is a **ceiling, not a floor**. A run ends as soon as every statement is done; the budget only ends a run that cannot finish, because agents are not allowed to stop before then. Setting it high costs nothing when the team succeeds and only costs idle time when it is stuck, so err high.
+
+Rule of thumb: estimate how long one agent needs for one statement, multiply by the number of statements, divide by the number of helpers, multiply by 2 to 3 for coordination and rejected merges, and add about 5 minutes for the lead's setup.
+
+`stall_min` caps the stuck case directly: when no merge has been accepted for that long, the gateway writes `state/STALLED` and the run is over (the door refuses work, agents may stop, what landed stays on `main`). Count it from the launch or the last accepted merge. Pauses and the time a run was down before `--resume` do not count. Make it about twice the time one statement should take, and longer than the lead's setup plus the first statement. Agents are not shown the stall clock; `boss.sh status` shows it to you.
+
+The other limits guard single operations against a hang; none of them limits the work:
+
+| Limit | What it is for |
+|---|---|
+| `task.check_timeout_s` (180 s) | One check in the merge job: a hung test cannot block every merge |
+| `sql_timeout_s` (5 s) | One board request: a runaway query cannot lock the board for everyone |
+| `wait-run.sh` 540 s | Claude Code caps one command at 10 minutes, so you wait in slices |
+| `team wait` 110 s | The same cap, on the agents' side |
 
 #### Profiles
 
@@ -117,10 +135,12 @@ Tell the user they can watch with `tmux attach -t <session>`. The windows are `g
 
 Run the wait command as a background job, so that you stay reachable and are woken when it exits:
 
-    harness/wait-run.sh 540     # exits when the run completes, pauses or times out, or after 540 s
+    harness/wait-run.sh 540     # exits when the run completes, stalls, pauses or times out, or after 540 s
     harness/boss.sh status      # one-line state of the run, at any time
 
-The first line `wait-run.sh` prints is `DONE`, `HALT`, `TIME UP` or `STILL RUNNING`. On `STILL RUNNING`, start it again. If you run under `/goal`, each turn is one round of this step (`references/goal.md`).
+The first line `wait-run.sh` prints is `DONE`, `STALLED`, `HALT`, `TIME UP` or `STILL RUNNING`. On `STILL RUNNING`, start it again. If you run under `/goal`, each turn is one round of this step (`references/goal.md`).
+
+On **STALLED**, no merge was accepted for `stall_min` minutes and the run is over: go to step 7, Finish. If the limit was plainly too short for the task (a check that legitimately takes long, say), `harness/boss.sh unstall` reopens the run with a fresh stall clock; then `harness/boss.sh say all "The run is reopened. Carry on."`.
 
 If it returns **HALT**, the monitor blocked something and the whole team is paused. `boss.sh status` shows the blocked action. Read it in full, then:
 
@@ -166,8 +186,8 @@ When the machine restarts or the tmux session dies, the run is not lost: the boa
 | `harness/test_gateway.sh`, `harness/selftest.sh` | Pre-launch tests; both reset what they touch |
 | `./launch.sh` | Starts the tmux session and the run clock |
 | `./launch.sh --resume` | Continues an interrupted run: same board and `main`, time down given back |
-| `harness/wait-run.sh [seconds]` | Blocks until the run completes, pauses, or times out |
-| `harness/boss.sh status / trust / say <id or all> "<text>" / messages / resume / remove <id> / end` | The boss's controls. `messages` prints every message the agents sent each other. |
+| `harness/wait-run.sh [seconds]` | Blocks until the run completes, stalls, pauses, or times out |
+| `harness/boss.sh status / trust / say <id or all> "<text>" / messages / resume / unstall / remove <id> / end` | The boss's controls. `messages` prints every message the agents sent each other; `unstall` reopens a stalled run. |
 | `python3 harness/verify.py` | Checks every statement on a fresh checkout of `main` |
 | `python3 harness/from-goal.py <contract> [--apply --allowed <regex> ...]` | Turns a make-goal contract into the task, before `setup.sh` |
 | `python3 harness/offline_monitor.py` | Summary of the run's records |

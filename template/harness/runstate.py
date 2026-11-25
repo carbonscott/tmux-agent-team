@@ -49,6 +49,12 @@ def ended_at(beat):
     if os.path.exists(STATE + "/STALLED"):
         return "it had STALLED"
     deadline = num("deadline")
+    try:        # a pause stops the clock: boss.sh resume gives all of it back when it is cleared
+        paused_since = float(json.load(open(STATE + "/HALT"))["ts"])
+    except (OSError, ValueError, KeyError, TypeError):
+        paused_since = None
+    if deadline is not None and beat is not None and paused_since is not None:
+        deadline += max(0.0, beat - paused_since)
     if deadline is not None and beat is not None and deadline <= beat:
         return "it had run out of time"
     return None
@@ -64,7 +70,8 @@ def classify():
     why = ended_at(last_beat()[0])
     if why:
         return "ended", ("%s before its session went away; there is nothing to resume. Put it away with "
-                         "./teardown.sh --archive" % why)
+                         "./teardown.sh --archive%s" % (why, " (or reopen it: harness/boss.sh unstall, then "
+                                                         "./launch.sh --resume)" if "STALLED" in why else ""))
     return "INTERRUPTED", ("started, not complete, and its tmux session is gone. Continue it with "
                            "./launch.sh --resume, or put it away with ./teardown.sh --archive")
 

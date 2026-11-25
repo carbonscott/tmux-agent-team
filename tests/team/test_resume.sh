@@ -68,6 +68,16 @@ check "the record says it resumed paused" '"paused": true' tail -1 "$W/records/r
 ( cd "$W" && harness/boss.sh resume ) >/dev/null 2>&1
 check "clearing the pause gives back pause and time down together" '^ok$' near "$(num "$W/state/deadline")" "$D1" 400
 
+# --- a pause that outlasted the time left does not end the run: clearing it gives that time back
+mk_workdir lead h1; setup_wd; launch >/dev/null 2>&1; start_gateway; wait_for 8 test -s "$W/state/heartbeat"
+python3 -c "import json,time; json.dump(dict(ts=time.time()-900, agent='h1', reason='test'), open('$W/state/HALT','w'))"
+ago deadline 100; crash 30
+check "a run paused past its deadline is still interrupted" 'INTERRUPTED' st
+check "and --resume takes it, still paused" 'PAUSED' sh -c "cd '$W' && ./launch.sh --resume"
+( cd "$W" && harness/boss.sh resume ) >/dev/null 2>&1
+check "clearing the pause leaves time to work" '^ok$' python3 -c "
+import time; left = float(open('$W/state/deadline').read()) - time.time(); print('ok' if 700 < left < 900 else left)"
+
 # --- a run that had ended is not interrupted, and is not resumed
 mk_workdir lead h1; setup_wd; launch >/dev/null 2>&1; start_gateway; wait_for 8 test -s "$W/state/heartbeat"
 ago deadline 100; crash 30

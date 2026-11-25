@@ -12,7 +12,7 @@ Check flags and settings against your own version.
 | Board | One SQLite file in `state/`, opened only by the gateway. `me()` is a SQL function the gateway binds per agent; an authorizer limits what helpers may run, and refuses every write to the gateway's own tables (`messages`, `message_reads`) | `harness/gateway.py` (`Board`) |
 | Merge job | Scratch worktree, path allowlist, the task's check inside bubblewrap with no network | `harness/gateway.py` (`do_mr`, `run_check`) |
 | Monitor | `PreToolUse` hook with fixed rules; auto mode's classifier, whose denials reach a `PermissionDenied` hook; both write the pause flag | `harness/hook.py`, `harness/denied.py` |
-| Keep going | `Stop` hook; a timer types a reminder into the lead's window | `harness/keepgoing.py`, `harness/remind.sh` |
+| Keep going | `Stop` hook; a timer types a reminder into the lead's window. The hook lets agents stop once the run is done, out of time, paused or stalled (`state/STALLED`, written by the gateway) | `harness/keepgoing.py`, `harness/remind.sh` |
 | Rejoining after a crash | `launch.sh --resume` starts every agent as a new session (`run-agent.sh <id> --resume`) with the rejoining brief from `render.py --resume`; `claude --continue` is not used | `launch.sh`, `harness/runstate.py`, `docs/*-rejoin.md` |
 | Records | Hook and gateway logs in `records/`, which the sandbox hides | `harness/offline_monitor.py` |
 | Goal contracts | A make-goal contract for `/goal` becomes the task (`task.checks`); the boss may run under `/goal` with `verify.py` as its proof | `harness/from-goal.py`, `references/goal.md` |

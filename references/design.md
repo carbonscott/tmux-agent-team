@@ -21,7 +21,7 @@ has no size limit. The template has been run with four agents.
 | 4 | **One door out.** One command (`team`) for everything shared, served by a gateway outside the agents' reach that stamps identity, enforces limits and logs. | One place to enforce, one place to log. |
 | 5 | **Walls.** An agent writes only in its own workspace, cannot see the others or the harness, and has no network. Tools that cannot be walled are removed. | Without walls, rules 1 to 4 are only requests. |
 | 6 | **Check before acting, and fail closed.** A monitor sees every command and edit first. A block pauses the whole team until the boss has reviewed it. | A team that keeps running while you investigate has time to try the next thing. |
-| 7 | **Keep going until the check says done.** No agent may stop while statements are open and time remains. | Agents stop early, after their own task or while waiting. |
+| 7 | **Keep going until the check says done.** No agent may stop while statements are open and time remains, unless the run has stalled: no merge accepted for `stall_min`. | Agents stop early, after their own task or while waiting. The stall limit ends a team that is stuck instead of letting it idle until the budget is gone. |
 | 8 | **A cold start from a brief.** Each agent is a separate session that starts from a short written brief. A helper's brief says only where the orders are. | Inherited context is a private channel the board does not record. |
 | 9 | **Records out of reach.** Every tool call, gateway request and merge is logged where agents cannot read or write. | The monitor catches only what it was built for. The records catch the rest. |
 
@@ -54,6 +54,7 @@ orders are, which keeps the briefs short and shows that the board carries everyt
 | A task written from a make-goal contract (`from-goal.py`) | Only the conversion is checked: refused for exploratory contracts, for contracts with no command, and after `setup.sh`. Whether each item's command really proves the item is the boss's judgement. |
 | The boss under `/goal`, or an agent's own `/goal` on the `open` profile | Requested only (`references/goal.md`). The harness does not see the goal loop; it sees the tool calls and merges it causes. |
 | Pause on a rule violation | Enforced by the hook (tested) |
+| Ending a stalled run (`stall_min`) | Enforced by the gateway: it writes `state/STALLED` from its 2-second watch loop and then refuses `sql`, `push` and `mr`; the Stop hook lets agents go. Pauses and down time before a resume are moved out of the stall clock (`state/stall_from`) the same way they are moved out of the deadline. A merge being checked when the limit passes gets its answer first. Tested with the stub tmux only; never seen in a real run. Agents are not shown the stall clock, so landing filler to reset it is not invited; nothing stops it either, beyond the check. |
 | Pause when the model classifier denies an action | Built, never triggered in a run |
 | Paths given to the file tools (Read, Edit, Write, Glob, Grep) | Checked by fixed rules in `hook.py` only; never exercised, since agents used the shell |
 | Messages (`team msg`, `team inbox`) | Enforced by the gateway (tested with stubs, not yet in a real run): the sender is the spool the request came in by; unknown recipients, removed senders, a pause and the end of the time are refused; `messages` and `message_reads` refuse every write, trigger, index, alter and drop through `team sql`, the lead's included. That an agent reads its inbox when `team status` says `unread messages` is only requested. |
@@ -73,7 +74,7 @@ orders are, which keeps the briefs short and shows that the board carries everyt
 
 Not yet exercised in any run: any profile other than `sealed` (only stub-based tests have
 started one), WebFetch through a `web-fetch` subagent, splitting a task, moving a helper between crews, the
-five-minute reminder, a slow check, a helper dying mid-task, teams larger than four,
+five-minute reminder, a slow check, a helper dying mid-task, a stalled run, teams larger than four,
 resuming a run after a real crash (`launch.sh --resume` has run only against stub tmux and
 claude), archiving a real run (`teardown.sh --archive`), and the run report (`report.py`) on a
 real run's records.
