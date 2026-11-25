@@ -191,3 +191,8 @@ or a blocked command is text an agent wrote, and the page must not run it.
 - **Stop test gateways.** A gateway left behind by an interrupted test answered later
   requests with stale state. One gateway per directory is now enforced with a lock.
 - **Keep reference solutions away from the agents.** `task/` is hidden from them.
+- **A narrower monitor rule is a hole.** The rule for `.claude` and `.ssh` was once narrowed to
+  "a path into them", so that an agent could grep for the word. A quoted or built path
+  (`wc -c ~/'.claude'/history.jsonl`) then passed, and the sandbox did not hide that file: a
+  session read the owner's prompt history with no pause. The bare-word rule is back, and the
+  sandbox now hides the files themselves; a mention of the word is a known false alarm.

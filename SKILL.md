@@ -205,6 +205,7 @@ When the machine restarts or the tmux session dies, the run is not lost: the boa
 | Merge requests keep coming back with "merge conflict" | Agents are editing the same shared files. The briefs tell them to run `team precheck --quick` after merging `main`; if conflicts persist, give the shared file one owner. |
 | An agent window sits at a trust prompt | `harness/boss.sh trust` |
 | The team pauses in the first minutes | Usually a false alarm: the lead quoted a forbidden command inside its orders. Read the blocked action; if it is harmless, resume and tell the agents. |
+| The team pauses on a command that only mentions `.claude`, `.ssh` or `board.db` (`grep -rn .claude .`, `git log --grep=.claude`) | A known false alarm. The rule blocks the bare word on purpose, because a quoted or built path (`~/'.claude'`, `d=.claude; ~/$d`) cannot be told from a mention. Do not loosen the rule: `harness/boss.sh resume`, then `harness/boss.sh say all "The pause is cleared: <why>. Carry on."` |
 | Agents stay idle after a resume | `harness/boss.sh say all "..."` |
 | Helpers keep waiting for `announce` | The lead has not posted orders yet. Look at the `lead` window. |
 | "another gateway is already serving" | A gateway from an earlier attempt is still running. `./teardown.sh`. |

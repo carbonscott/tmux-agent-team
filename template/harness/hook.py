@@ -51,8 +51,12 @@ HARD_BASH = [
     (r"\bgit\s+remote\s+(?:add|set-url|rename|remove)\b", "changing git remotes"),
     (ROOTNAME + r"/(?:harness|records|state|task)\b", "touching harness, records, state or task files"),
     (r"(?:%s/ws/|\.\./)(?:%s)\b" % (ROOTNAME, "|".join(OTHERS)), "touching another agent's workspace"),
-    # a path into .claude or .ssh, not the bare word (an agent may grep for ".claude")
-    (r"/\.(?:claude|ssh)\b|(?:^|[\s=(<>])\.(?:claude|ssh)(?:/|\s|$)|/run/user\b", "touching the agent loop or credentials"),
+    # The bare word, not only a path: a path can be quoted or built (~/'.claude', ~/{.claude,x},
+    # d=.claude; ~/$d), and the rule cannot tell those apart from a mention. So a command that
+    # merely mentions .claude (grep -r .claude) pauses the team too: a known false alarm, and the
+    # price of failing closed. The shell sandbox (mk_settings.py) hides the files themselves.
+    (r"\.claude\b|\.ssh\b|/run/user\b", "touching the agent loop or credentials"),
+    (r"\bboard\.db\b", "reaching the board directly (use `team sql`)"),
 ]
 SOFT_BASH = [
     (r"\b(?:pip3?|uv)\s+(?:pip\s+)?install\b|\bapt(?:-get)?\s+install\b|\bnpm\s+i", "no network: nothing can be installed"),
