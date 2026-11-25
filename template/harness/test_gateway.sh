@@ -37,15 +37,37 @@ if [ -n "$H2" ]; then
   check "two simultaneous claims produce one winner" '^1$'        echo "$(cat state/c1.out state/c2.out | grep -cE "^($H1|$H2)\$")"
 fi
 
+echo "-- messages"
+as $H1 $T msg lead "probe message" >/dev/null 2>&1
+check "a message reaches its recipient, under the sender" "$H1 -> lead: +probe message" sh -c "cd '$R/ws/lead' && $T inbox | tr '\n' ' '"
+check "nobody can write the messages table"         'not allowed' as lead $T sql "INSERT INTO messages(sender, recipient, body) VALUES ('lead', '$H1', 'forged')"
+check "a message with control characters is refused" 'control or format character' as $H1 $T msg lead "$(printf 'x\033[2Ky')"
+
 echo "-- the merge job"
 cd "$R/ws/$H1" || exit 1
 echo x > outside_probe.txt; git add -A; git commit -q -m "edit outside the allowed paths"
 check "a change outside the allowed paths is rejected" 'REJECTED: these paths' $T mr "outside probe"
+# With task.attempted_if, a wrong answer is rejected. Without it (a task from from-goal.py), every
+# statement is checked on every merge and a wrong answer is merged but not counted as done.
+ATT=$(python3 -c "import json; print(json.load(open('$R/config.json'))['task'].get('attempted_if') or '')")
+landed() { cat "$R/state/landed.json"; }
 if [ -d "$R/task/probe/bad" ] && [ -d "$R/task/probe/good" ]; then
   git reset -q --hard origin/main; cp -r "$R/task/probe/bad/." .; git add -A; git commit -q -m "bad probe"
-  check "the task's wrong answer is rejected"        'REJECTED by the check'      $T mr "bad probe"
-  git reset -q --hard origin/main; cp -r "$R/task/probe/good/." .; git add -A; git commit -q -m "good probe"
-  check "the task's right answer is accepted"        'ACCEPTED: merged into main' $T mr "good probe"
+  if [ -n "$ATT" ]; then
+    check "the task's wrong answer is rejected"      'REJECTED by the check'      $T mr "bad probe"
+  else
+    check "the task's wrong answer is merged but not counted as done" 'FAILED|REJECTED' $T mr "bad probe"
+  fi
+  BAD=$(landed)
+  git fetch -q origin; git reset -q --hard origin/main; cp -r "$R/task/probe/good/." .; git add -A; git commit -q -m "good probe"
+  if [ -n "$ATT" ]; then
+    check "the task's right answer is accepted"      'ACCEPTED: merged into main' $T mr "good probe"
+  else
+    $T mr "good probe" >/dev/null 2>&1
+    check "the task's right answer is counted as done" '^counted:' python3 -c "
+import json, sys; new = [s for s in json.loads(sys.argv[2]) if s not in json.loads(sys.argv[1])]
+print('counted: ' + ' '.join(new) if new else 'nothing new is done: the probe answers no statement')" "$BAD" "$(landed)"
+  fi
 else
   echo "SKIP  no task/probe/good and task/probe/bad: nothing shows that the check can tell right from wrong"
 fi
@@ -55,8 +77,9 @@ check "requests are logged under the sender's name" "\"agent\": \"$H1\", \"op\":
 
 # reset everything the test touched
 kill $GW 2>/dev/null; wait $GW 2>/dev/null
-rm -f state/board.db state/board.db-wal state/board.db-shm state/c1.out state/c2.out
+rm -f state/gateway.pid state/board.db state/board.db-wal state/board.db-shm state/c1.out state/c2.out
 git -C central.git update-ref refs/heads/main "$(cat state/seed_sha)"; git -C central.git branch -q -D "agent/$H1" 2>/dev/null
 ( cd "$R/ws/$H1" && git fetch -q origin && git reset -q --hard origin/main && git clean -qfd )
-rm -f records/*.jsonl state/gw-test.log state/deadline; echo '[]' > state/landed.json
+# the probe merge set the stall clock and the gateway beat: neither belongs to a run yet
+rm -f records/*.jsonl state/gw-test.log state/deadline state/stall_from state/heartbeat; echo '[]' > state/landed.json
 echo "$ok passed, $bad failed"; [ $bad -eq 0 ]

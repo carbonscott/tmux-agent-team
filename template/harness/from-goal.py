@@ -2,8 +2,15 @@
 
   python3 harness/from-goal.py <contract.json>
       print the plan as JSON and write nothing
-  python3 harness/from-goal.py <contract.json> --apply --allowed <regex> [<regex> ...]
-      write the plan into config.json and task/seed/STATEMENTS.md (only before setup.sh)
+  python3 harness/from-goal.py <contract.json> --apply --allowed <regex> [<regex> ...] [--replace-statements]
+      write the plan into config.json and task/seed/STATEMENTS.md (only before setup.sh). Text that
+      was in STATEMENTS.md before is kept below the generated statements, under "## Earlier text of
+      this file", unless --replace-statements is given.
+
+It never writes task/probe/: it cannot know a right answer. A probe whose files the new allowed
+paths freeze cannot answer the new task, so it is removed; any other probe is kept for the boss
+to confirm. Without one, test_gateway.sh skips the step that shows the check can tell a right
+answer from a wrong one.
 
 Each done_when item that names a command in backticks becomes a statement, and that command
 becomes the statement's own check (task.checks). The merge job judges a check by its exit
@@ -18,6 +25,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import sys
 
 R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -126,7 +134,62 @@ def statements_md(p, source, allowed):
     return "\n".join(out)
 
 
-def apply(p, source, allowed):
+MARK = "<!-- written by harness/from-goal.py"
+KEPT = "## Earlier text of this file"
+
+
+def nested(text):
+    """Markdown text with its headings two levels deeper (code blocks left alone), to sit under KEPT."""
+    out, code = [], False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            code = not code
+        out.append("##" + line if not code and re.match(r"#{1,4} ", line) else line)
+    return "\n".join(out)
+
+
+def statements_file(path, generated, source, replace):
+    """The new STATEMENTS.md, and a line saying what happened to the text that was there."""
+    old = open(path).read() if os.path.exists(path) else ""
+    head = "%s from the contract %s; text above the heading \"%s\" is generated -->\n" % (MARK, source, KEPT[3:])
+    if old.startswith(MARK):           # written by an earlier --apply: keep what that one kept
+        i = old.find("\n" + KEPT + "\n")
+        kept = "" if replace or i < 0 else old[i + 1:]
+        did = "rewritten" + (" (its kept earlier text dropped: --replace-statements)" if replace and i >= 0 else
+                             ", with the earlier text it kept" if kept else "")
+    elif old.strip() and replace:
+        kept, did = "", "replaced: the %d lines that were there are dropped (--replace-statements)" % len(old.splitlines())
+    elif old.strip():
+        kept = (KEPT + "\n\n<!-- kept by harness/from-goal.py --apply -->\nThis was the text of this file before the "
+                "goal contract was applied. It may describe the task in more detail than the contract does, or belong "
+                "to another task: keep what applies, and delete the rest before ./setup.sh.\n\n" + nested(old).strip()
+                + "\n")
+        did = ("written from the contract; the %d lines that were there are kept below it, under \"%s\" "
+               "(--replace-statements drops them)" % (len(old.splitlines()), KEPT[3:]))
+    else:
+        kept, did = "", "written from the contract"
+    return head + generated.rstrip("\n") + "\n" + ("\n" + kept if kept else ""), did
+
+
+def probe_note(allowed):
+    """Deal with task/probe/ for the new task, and say what was done."""
+    d = os.path.join(R, "task", "probe")
+    files = sorted(os.path.relpath(os.path.join(w, f), os.path.join(d, side))
+                   for side in ("good", "bad") for w, _, fs in os.walk(os.path.join(d, side)) for f in fs)
+    write = ("Write task/probe/good/ (the files of a right answer to one of these statements, laid out as in the "
+             "repository) and task/probe/bad/ (a wrong answer to the same statement) before ./setup.sh; see "
+             "references/goal.md. Without them test_gateway.sh skips the step that shows the check can tell them apart.")
+    if not os.path.isdir(d):
+        return "note: there is no task/probe/. " + write
+    if files and not any(any(re.fullmatch(a, f) for a in allowed) for f in files):
+        shutil.rmtree(d)
+        return ("removed task/probe/: its files (%s) lie outside the new allowed paths, so it cannot answer this task "
+                "(it was the example task's). %s" % (", ".join(sorted(set(files))), write))
+    return ("note: kept task/probe/ (%s). from-goal.py cannot check it: make sure good/ is a right and bad/ a wrong "
+            "answer to one of these statements." % (", ".join(sorted(set(files))) or "empty"))
+
+
+def apply(p, source, allowed, replace=False):
     for d in ("central.git", "ws"):
         if os.path.exists(os.path.join(R, d)):
             die("setup.sh has already run here (%s/ exists), so the task is fixed. Apply the contract to a fresh "
@@ -147,26 +210,25 @@ def apply(p, source, allowed):
     task["check"] = 'echo "statement {name} has no entry in task.checks" >&2; exit 1'
     seed = os.path.join(R, "task", "seed")
     os.makedirs(seed, exist_ok=True)
+    text, did = statements_file(os.path.join(seed, "STATEMENTS.md"), statements_md(p, source, allowed), source, replace)
     with open(os.path.join(seed, "STATEMENTS.md"), "w") as f:
-        f.write(statements_md(p, source, allowed))
+        f.write(text)
     with open(cfg_path + ".tmp", "w") as f:
         json.dump(cfg, f, indent=2)
         f.write("\n")
     os.rename(cfg_path + ".tmp", cfg_path)
-    print("wrote config.json (task: %d statements, their checks, %d allowed path patterns) and task/seed/STATEMENTS.md"
+    print("wrote config.json (task: %d statements, their checks, %d allowed path patterns)"
           % (len(p["statements"]), len(allowed)))
+    print("task/seed/STATEMENTS.md: " + did)
     if any(re.fullmatch(a, "STATEMENTS.md") for a in allowed):
         print("WARNING: an allowed pattern matches STATEMENTS.md, so agents may rewrite their own statements")
     extra = sorted(n for n in os.listdir(seed) if n not in ("STATEMENTS.md", ".gitignore"))
     if extra:
         print("note: task/seed/ also holds %s. It all becomes the starting repository; remove what belongs to "
               "the example task." % ", ".join(extra))
-    for d, why in (("task/probe", "task/probe/good and bad must be a right and a wrong answer to one of these "
-                                  "statements, or be deleted (test_gateway.sh then skips that step)"),
-                   ("task/install.sh", "task/install.sh installs the check's tools; make it install what these "
-                                       "checks need, or delete it")):
-        if os.path.exists(os.path.join(R, d)):
-            print("note: " + why)
+    print(probe_note(allowed))
+    if os.path.exists(os.path.join(R, "task/install.sh")):
+        print("note: task/install.sh installs the check's tools; make it install what these checks need, or delete it")
     print("next: ./setup.sh")
 
 
@@ -175,9 +237,13 @@ def main():
     ap.add_argument("contract")
     ap.add_argument("--apply", action="store_true", help="write config.json and task/seed/STATEMENTS.md")
     ap.add_argument("--allowed", nargs="+", metavar="REGEX", help="paths agents may change (with --apply)")
+    ap.add_argument("--replace-statements", action="store_true",
+                    help="drop the text that was in task/seed/STATEMENTS.md (by default it is kept below)")
     a = ap.parse_args()
     if a.allowed and not a.apply:
         die("--allowed is used only with --apply")
+    if a.replace_statements and not a.apply:
+        die("--replace-statements is used only with --apply")
     if a.apply and not a.allowed:
         die("--apply needs --allowed <regex> ...: the paths agents may change (everything else is frozen)")
     try:
@@ -188,7 +254,7 @@ def main():
     for w in warnings(p):
         print("WARNING: " + w, file=sys.stderr)
     if a.apply:
-        apply(p, os.path.basename(a.contract), a.allowed)
+        apply(p, os.path.basename(a.contract), a.allowed, a.replace_statements)
     else:
         print(json.dumps(p, indent=2))
 

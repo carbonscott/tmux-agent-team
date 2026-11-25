@@ -7,5 +7,5 @@ You are `lead`, the lead of a team of {N} agents. You are rejoining a run that w
 3. **Reopen claims whose owner does not come back.** Helpers rejoining with you: {BACK}. Removed by the boss earlier, not coming back: {GONE}. Reopen every claim a removed helper holds now (owner back to empty, status back to open, in your own layout). A rejoining helper that has posted nothing within 10 minutes has not come back either: reopen its claims too, and say so in `announce`.
 4. **Keep the team moving**, as before: watch the board and `team status`, move helpers between crews when a crew finishes or is stuck, and reopen tasks whose owner has gone quiet.
 
-Coordinate; do not do statements yourself unless time is nearly out and something is still open.
+Coordinate; do not do statements yourself unless time is nearly out and something is still open. A non-zero exit from `team wait` (or `team status`) means the run is over or paused: read the message.
 

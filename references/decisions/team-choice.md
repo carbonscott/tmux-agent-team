@@ -16,12 +16,47 @@ about its HEAD now, and nothing lands.
 
 ## Evidence from this run
 
-The team was seven agents (a lead and six helpers) building eight statements at once, all editing the same few
-shared files (`SKILL.md`, `references/design.md`, `references/claude-code.md`,
-`harness/gateway.py`, `harness/boss.sh`). In the first 45 minutes, before four statements
-were done, agents reported on the board:
+> **Corrected after the run by review**, from the run's records (`records/gateway.jsonl`,
+> `records/merges.jsonl`, `state/started`, `state/DONE`). The team's first version said the
+> conflicts came "in the first 45 minutes, before four statements were done", listed four
+> agents, and gave the cost as resolving and re-running checks. The records show more
+> rejections, a shorter run, and a different main cost. The team's reasoning and its choice
+> stand; only the numbers below were corrected.
 
-| Agent | What happened | Cost |
+The team was seven agents (a lead and six helpers) building eight statements at once, all
+editing the same few shared files (`SKILL.md`, `references/design.md`,
+`references/claude-code.md`, `template/harness/gateway.py`, `template/harness/boss.sh`).
+
+- **The run** took 33.3 minutes from launch to `RUN COMPLETE` (8 of 8). The fourth statement
+  (`resume`) was done at minute 14.7, and the lead chose this improvement at 4 of 8 done
+  (board note 27).
+- **The rejections.** Of 27 merge requests, 16 were accepted and 11 rejected, every one of
+  them for a merge conflict: w2 three times (`stall`), w1 twice (`resume`), w4 twice (`goal`),
+  w5 twice (`msg`), w3 once (`profiles`), w6 once (`report`). Every conflict was in a shared
+  document or a shared script.
+- **The cost was waiting.** `team mr` takes the merge lock, and each accepted merge runs the
+  checks of every attempted statement, so an agent heard about its conflict only when its turn
+  in the queue came. The 11 rejections took 714 s in all (713.99 s) to come back, from 0.1 s to
+  261 s each. Finding the conflict itself takes under a second. Resolving it and re-running
+  the local checks (about 40 s to a minute a round, as the agents reported) came on top.
+
+| Asked at (min) | Answered at (min) | Agent | Statement | Conflict in | Waited |
+|---|---|---|---|---|---|
+| 6.9 | 7.4 | w3 | profiles | `SKILL.md` | 33.0 s |
+| 7.2 | 7.4 | w5 | msg | `SKILL.md` | 15.3 s |
+| 8.4 | 8.4 | w1 | resume | `references/design.md`, `template/harness/render.py` | 0.1 s |
+| 8.8 | 9.6 | w5 | msg | `SKILL.md`, `references/claude-code.md` | 48.8 s |
+| 9.9 | 9.9 | w1 | resume | `references/design.md`, `template/harness/boss.sh` | 0.1 s |
+| 10.6 | 10.6 | w2 | stall | `SKILL.md`, `references/design.md` | 0.2 s |
+| 12.1 | 14.7 | w4 | goal | `references/design.md`, `references/goal.md` (add/add) | 153.5 s |
+| 12.7 | 14.7 | w6 | report | `SKILL.md`, `references/design.md` | 116.5 s |
+| 13.2 | 14.7 | w2 | stall | `SKILL.md`, `references/claude-code.md`, `references/design.md`, `template/harness/boss.sh`, `template/launch.sh` | 85.0 s |
+| 18.3 | 18.3 | w4 | goal | `references/design.md` | 0.1 s |
+| 22.1 | 26.5 | w2 | stall | `SKILL.md`, `references/design.md` | 261.4 s |
+
+What the agents reported on the board at the time (their words, kept as the team's record):
+
+| Agent | What happened | Cost, as reported |
 |---|---|---|
 | w3 | `profiles` merge REJECTED: conflict in the `SKILL.md` commands table; `archive` had landed a row beside it minutes earlier | Fetch, resolve, rerun two statements' checks (~40 s each), resubmit |
 | w5 | `msg` merge REJECTED twice: `SKILL.md` commands table, then `SKILL.md` and `references/claude-code.md`; `goal` and `profiles` landed between the fetch and `team mr` | Two rounds of resolve, `check.sh` (~50 s), resubmit |
@@ -36,7 +71,9 @@ Two further facts made the problem worse than the conflicts alone:
 - After merging `main`, predicting the merge job meant running `tests/check.sh` once per
   attempted statement by hand. w3 skipped it once; the merge was accepted, but by luck.
 
-Three agents (w3, w5, w1) independently proposed a dry run of the merge job.
+w3 proposed a dry run of the merge job; w5 and w1 seconded it with evidence of their own, and w4
+added its own after the choice (board notes 12, 18, 24 and 37; corrected after the run by review:
+the first version said three agents proposed it independently).
 
 ## Why it does not weaken anything
 
@@ -67,4 +104,6 @@ Three agents (w3, w5, w1) independently proposed a dry run of the merge job.
 - The verdict is for `main` at the moment of the precheck. Something else may land before
   `team mr`; the merge job then decides, as before.
 - Several prechecks at once compete with the merge job for the machine.
-- Tested with stub `tmux` and `claude` only; not yet used by agents in a real run.
+- Tested with stub `tmux` and `claude` only. Nobody used it during this run (it landed at
+  minute 24.5, and the records hold no `precheck` request), so it has not yet been seen to
+  save a round trip; the boss should read its count in the next run's records.

@@ -19,7 +19,11 @@ USAGE = """usage:
   team precheck [--quick]     ask the merge job what it would say about your HEAD now; lands nothing
                               (--quick: only whether it merges cleanly and touches allowed paths)
   team mr "<title>"           push, then ask the merge job to land it on main
-  team wait <seconds>         sleep (max 110), then print status
+  team wait <seconds>         wait (max 110), then print status; ends at once if the team is
+                              paused or the run is over
+Exit status of team status and team wait: 0 the run goes on, 3 the team is paused, 4 the run
+is over for you (complete, stalled, out of time, or you were removed). On 3 or 4 the reason is
+printed on stderr too, so a filter on stdout cannot hide it.
   team msg <agent|all> "<text>"   send a message to one agent, or to all; text - reads stdin
   team inbox [--all]          print your unread messages and mark them read (--all: every
                               message to or from you). `team status` shows how many are unread.
@@ -54,10 +58,15 @@ def call(op, timeout, **kw):
             with open(resp) as f:
                 r = json.load(f)
             os.unlink(resp)
-            out = r.get("out", "")
+            out, code = r.get("out", ""), r.get("code", 0)
             if out:
                 print(out)
-            return r.get("code", 0)
+            if op in ("status", "wait") and code in (3, 4):
+                ends = ("RUN COMPLETE", "STALLED", "TIME IS UP", "TEAM PAUSED", "You have been removed")
+                why = [l for l in out.splitlines() if l.startswith(ends)] or out.splitlines()[-1:]
+                print("team: %s (exit %d: %s)" % (" ".join(why), code, "the team is paused" if code == 3
+                                                    else "the run is over for you"), file=sys.stderr)
+            return code
         time.sleep(0.05)
     print("team: gateway did not answer within %ds" % timeout, file=sys.stderr)
     return 75
@@ -102,8 +111,7 @@ def main(argv):
         return call("inbox", 20, all=bool(args))
     if cmd == "wait":
         n = max(1, min(110, int(float(args[0])) if args else 30))
-        time.sleep(n)
-        return call("status", 20)
+        return call("wait", n + 30, seconds=n)
     print(USAGE)
     return 2
 

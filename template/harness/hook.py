@@ -10,6 +10,8 @@
 - While HALT exists, or the agent has been removed, everything is denied.
 - A tool the agent's profile (profiles.py) does not grant is refused. WebFetch may reach only
   http(s) hosts on the public internet: never this machine or its private network.
+- A Bash call that asks for network access (allowed_domains) or carries any parameter beyond
+  BASH_KEYS is a HARD violation: the shell stays offline in every profile.
 The LLM layer is Claude Code's auto-mode classifier; its denials reach
 denied.py, which also pauses the team.
 """
@@ -51,9 +53,18 @@ HARD_BASH = [
     (r"\bgit\s+remote\s+(?:add|set-url|rename|remove)\b", "changing git remotes"),
     (ROOTNAME + r"/(?:harness|records|state|task)\b", "touching harness, records, state or task files"),
     (r"(?:%s/ws/|\.\./)(?:%s)\b" % (ROOTNAME, "|".join(OTHERS)), "touching another agent's workspace"),
-    # a path into .claude or .ssh, not the bare word (an agent may grep for ".claude")
-    (r"/\.(?:claude|ssh)\b|(?:^|[\s=(<>])\.(?:claude|ssh)(?:/|\s|$)|/run/user\b", "touching the agent loop or credentials"),
+    # The bare word, not only a path: a path can be quoted or built (~/'.claude', ~/{.claude,x},
+    # d=.claude; ~/$d), and the rule cannot tell those apart from a mention. So a command that
+    # merely mentions .claude (grep -r .claude) pauses the team too: a known false alarm, and the
+    # price of failing closed. The shell sandbox (mk_settings.py) hides the files themselves.
+    (r"\.claude\b|\.ssh\b|/run/user\b", "touching the agent loop or credentials"),
+    (r"\bboard\.db\b", "reaching the board directly (use `team sql`)"),
 ]
+# The parameters a normal Bash call carries (every call recorded in the proof runs had only
+# these). allowed_domains asks Claude Code to open the sandbox's network to those hosts, and it
+# did: the shell fetched a page in every profile. So a non-empty allowed_domains, and any other
+# parameter, is a HARD block.
+BASH_KEYS = {"command", "description", "timeout", "run_in_background"}
 SOFT_BASH = [
     (r"\b(?:pip3?|uv)\s+(?:pip\s+)?install\b|\bapt(?:-get)?\s+install\b|\bnpm\s+i", "no network: nothing can be installed"),
     (CMD + r"(kill|pkill|killall)(?:\s|$)", "process control is not available"),
@@ -212,7 +223,10 @@ def main():
     def ab(p):
         return p if os.path.isabs(p) else os.path.join(cwd, p)
 
-    if tool not in GRANTED:
+    # A subagent hands its result back to its parent through SubagentHandback, a tool of the
+    # subagent's own. It is passed where the profile grants Agent, and only from inside a subagent.
+    handback = tool == "SubagentHandback" and "Agent" in GRANTED and bool(d.get("agent_id") or d.get("agent_type"))
+    if tool not in GRANTED and not handback:
         deny(d, "tool %s (not in the %s profile)" % (tool, PROFILE), False)
     if tool in ("Edit", "Write", "NotebookEdit"):
         check_write(d, ab(ti.get("file_path") or ti.get("notebook_path") or ""))
@@ -221,6 +235,12 @@ def main():
     elif tool in ("Glob", "Grep"):
         check_read(d, ab(ti.get("path") or cwd), True)
     elif tool == "Bash":
+        if ti.get("allowed_domains"):
+            deny(d, "a shell command that asks for network access (allowed_domains: %s)"
+                 % json.dumps(ti["allowed_domains"])[:200], True)
+        odd = sorted(str(k) for k in ti if k not in BASH_KEYS and k != "allowed_domains")
+        if odd:
+            deny(d, "a shell command with a parameter the monitor does not know (%s)" % ", ".join(odd)[:200], True)
         cmd = strip_data(ti.get("command") or "")
         for rx, why in HARD_BASH:
             if re.search(rx, cmd, re.M):
@@ -232,7 +252,7 @@ def main():
         check_url(d, str(ti.get("url") or ""))
     elif tool == "Skill" and re.search(r"tmux-agent-team", str(ti.get("skill") or ""), re.I):
         deny(d, "the team skill: an agent may not start another team", False)
-    elif tool not in ("WebSearch", "Agent", "Skill"):
+    elif tool not in ("WebSearch", "Agent", "Skill", "SubagentHandback"):
         deny(d, "tool %s" % tool, False)
     record(d, "pass")
 

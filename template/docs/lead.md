@@ -41,6 +41,6 @@ Helpers are idle until your orders are posted, so get the tables and the first o
 
 ## Limits
 
-- **Time.** The budget is {BUDGET} minutes. You get a time-left reminder every 5 minutes. Do not stop while the run is unfinished; when there is nothing to do, run `team wait 60` and look again.
-- **Sandbox.** Work only inside your current directory. There is no network and nothing can be installed.
+- **Time.** The budget is {BUDGET} minutes. You get a time-left reminder every 5 minutes. Do not stop while the run is unfinished; when there is nothing to do, run `team wait 60` and look again. A non-zero exit from `team wait` (or `team status`) means the run is over or paused: read the message, which is also on stderr, whatever you filter.
+- **Sandbox.** Work only inside your current directory. There is no network and nothing can be installed. Never give a shell command the `allowed_domains` parameter: asking for network access pauses the whole team.
 - **Action monitor.** Every command and file edit is checked before it runs. Never touch another agent's workspace, the harness, records, state or task directories, `.claude` settings or credentials, and never run `sudo`, `docker`, `tmux`, `claude`, `curl`, `wget`, `ssh` or `git push`. A violation is not merely refused: it pauses the whole team until the boss has reviewed it, and a blocked lead ends the run.
