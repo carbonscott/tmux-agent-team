@@ -87,7 +87,7 @@ def _shell_net(cfg, agent):
 if _shell_net(cfg, agent):
     tail += ("\n## Remote machines\n\n"
              "Your profile (`" + profiles.label_of(cfg, agent) + "`) has the `shell_net` knob. This run's shell sandbox is off, and your shell may reach other "
-             "machines: you may run `ssh`, `scp`, `sftp`, `rsync`, `curl`, `wget` and the `bridge` CLI. That "
+             "machines: you may run `ssh`, `scp`, `sftp`, `rsync`, `curl` and `wget`. That "
              "replaces the limits above only for those commands, and only for the machines your task "
              "names. Never connect back to this machine with them (`localhost`, its own name): that pauses "
              "the team. Do not give a shell command `allowed_domains`: it is refused, since the network is "

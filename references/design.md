@@ -48,8 +48,7 @@ work directory, where the agents' sandbox and the merge job's sandbox can both r
 - **Give every shared file one owner.** A file several statements must change is either
   prepared by the boss before launch or assigned to exactly one statement.
 - **A check speaks through its exit status.** The merge job reads nothing else. A proof
-  that only prints (`wc -l`, `cat`) convinces a reader, not the merge job; `from-goal.py`
-  warns about such commands in a goal contract.
+  that only prints (`wc -l`, `cat`) convinces a reader, not the merge job.
 - **Know how strong the check is.** A proof checker cannot be satisfied by a wrong proof.
   A test suite can be passed by wrong code.
 - **Size it.** If one agent could finish in a few minutes, the team exercises nothing.
@@ -67,7 +66,6 @@ work directory, where the agents' sandbox and the merge job's sandbox can both r
 | Only checked work reaches `main`; frozen paths; no direct pushes | Enforced by the merge job (tested) |
 | `main` is closed once the run is complete | Enforced by the gateway: after `state/DONE`, `team mr` and `team precheck` are refused, also for a request that was waiting for the merge lock when the run completed; `status`, `sql`, `msg` and `push` (to the agent's own branch) still answer. Chosen after the live proof run, where a merge was accepted three minutes after completion: a late merge could only land if every statement still passed, but it would move `main` under the boss's `verify.py` and hand-back. Tested with stubs. |
 | A statement's own check (`task.checks`) | Enforced by the merge job and `verify.py` exactly like `task.check`; shown only by stub-based tests |
-| A task written from a make-goal contract (`from-goal.py`) | Only the conversion is checked: refused for exploratory contracts, for contracts with no command, and after `setup.sh`. Whether each item's command really proves the item is the boss's judgement. |
 | The boss under `/goal`, or an agent's own `/goal` with the `skills` knob on | Requested only (`references/goal.md`). The harness does not see the goal loop; it sees the tool calls and merges it causes. |
 | Pause on a rule violation | Enforced by the hook (tested) |
 | Agents learn that the run is over | `team status` and `team wait` exit 3 while the team is paused and 4 once the run is over for the agent (complete, stalled, out of time, removed), with the reason on stderr as well as stdout; `team wait` waits in the gateway and returns at once when either happens, so `team wait 100 \| grep ...` cannot hide the end. That an agent acts on it is only requested by the briefs. Tested with stubs. |
@@ -102,14 +100,14 @@ rendered from a real run's records (seven agents, 33 minutes) and from a real ar
 `run.json` (through its `STATUS.txt`); an archive with `run.json` has been written only in
 stub-based tests.
 
-A task written from a goal contract, a boss running under `/goal`, and an agent running
-`/goal` inside the team have not been exercised either.
+A boss running under `/goal` and an agent running `/goal` inside the team have not been
+exercised either.
 
 ## An unwalled run (`"sandbox": false`)
 
 `"sandbox": false` in `config.json` writes every agent's settings with the shell sandbox's
-`enabled` set to `false`. It exists for teams whose shell must reach other machines (SSH, the
-`bridge` CLI to an HPC facility): the sandbox forbids that, and opening only Unix sockets
+`enabled` set to `false`. It exists for teams whose shell must reach other machines (SSH to an
+HPC facility, for example): the sandbox forbids that, and opening only Unix sockets
 (`allowAllUnixSockets`) also opened the boss's tmux server to a one-line script, which is
 worse. It is a choice per run, made by the owner, on the view that agents are not
 adversaries and the walls mostly guard against mistakes.
@@ -219,8 +217,8 @@ refuses. That rule reads the command text and is easy to get past (an alias in `
 an address the rule does not list): it guards against mistakes, as everything does in an
 unwalled run. `allowed_domains` means nothing with the sandbox off, so with `shell_net` it is
 refused without a pause. What the agent does on the other machine is out of the monitor's
-sight: it sees the command line, not what runs there. The `bridge` CLI needs nothing more: it
-is a program on the `PATH` that the monitor never matched. Tested with stubs only.
+sight: it sees the command line, not what runs there. Tested with stubs
+only.
 
 ## Adapting it
 

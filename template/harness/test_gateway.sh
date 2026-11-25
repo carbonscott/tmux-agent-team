@@ -47,7 +47,7 @@ echo "-- the merge job"
 cd "$R/ws/$H1" || exit 1
 echo x > outside_probe.txt; git add -A; git commit -q -m "edit outside the allowed paths"
 check "a change outside the allowed paths is rejected" 'REJECTED: these paths' $T mr "outside probe"
-# With task.attempted_if, a wrong answer is rejected. Without it (a task from from-goal.py), every
+# With task.attempted_if, a wrong answer is rejected. Without it (a task without `task.attempted_if`), every
 # statement is checked on every merge and a wrong answer is merged but not counted as done.
 ATT=$("$R/harness/py" -c "import json; print(json.load(open('$R/config.json'))['task'].get('attempted_if') or '')")
 landed() { cat "$R/state/landed.json"; }

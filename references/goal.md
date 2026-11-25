@@ -1,92 +1,22 @@
-# Running the team from a make-goal contract
+# Running `/goal` with the team
 
-The make-goal skill writes a contract for Claude Code's `/goal` loop: a JSON file whose
-`done_when` list holds checkable end states, each with its proof ("..., proven by printing
-the output of `<command>`"). There are two ways to use such a contract with the team, and
-both are allowed:
+Claude Code's `/goal` loop keeps a session working until a condition holds. There are two
+ways to use it with the team, and both are allowed:
 
 | Way | Who runs `/goal` | What the loop's condition is | Use it when |
 |---|---|---|---|
-| The boss under `/goal` | The boss, in its own session | `harness/verify.py` prints PASS for every statement | The whole contract is the team's task (the main way) |
+| The boss under `/goal` | The boss, in its own session | `harness/verify.py` prints PASS for every statement | The whole task is the boss's goal (the main way) |
 | An agent under `/goal` | One agent with the `skills` knob on (`open`), inside the team | The agent's own part is merged | An agent wants its own loop for the statement it claimed |
 
 Neither way starts a new tmux session or a new Claude Code session from inside the team.
 
 ## The boss under `/goal`
 
-### 1. Turn the contract into the team's task
+The boss may drive its loop with a make-goal contract it wrote itself (`.goal/<slug>.json`).
 
-    harness/py harness/from-goal.py .goal/<slug>.json            # prints the plan; writes nothing
-    harness/py harness/from-goal.py .goal/<slug>.json --apply --allowed '<regex>' [...]
+### 1. The boss's own condition
 
-The plan is JSON: `statements` (each with `name`, `check`, `text`), `skipped`, and the
-contract's `goal` and `guardrails`.
-
-- Each `done_when` item that names a command in backticks becomes a statement. Its `check`
-  is the first command after "proven by" (or the item's first command), its `text` is the
-  item, and its `name` is the stem of the first path the item names (`out/alpha.txt` gives
-  `alpha`), or else its first meaningful words. Names are unique (`alpha_2`).
-- Items with no command go to `skipped`: make-goal's claims item and ledger item, and any
-  other end state only the boss can show. An item about the contract's own files under
-  `.goal/` is skipped even if it names a command: the team's repository does not hold them.
-- The command must exit 0 exactly when the item holds. `grep -x ok out/alpha.txt` does. A
-  command that only prints something for a reader to judge (`wc -l`, `cat`, `ls`) is
-  accepted with a warning, because the merge job reads only the exit status: rewrite it in
-  `config.json` before `setup.sh`, for example `test $(wc -l < src/a.py) -lt 200`.
-- `from-goal.py` refuses (exit status 2) an `exploratory` contract (findings and decisions
-  have no exit status to check), a contract with no item that names a command, and a work
-  directory where `setup.sh` has already run (`central.git/` or `ws/` exists).
-
-`--apply` writes into `config.json`: `task.statements`, `task.checks` (one command per
-statement), and `task.allowed_paths` from `--allowed`; it removes `task.attempted_if`, and
-makes `task.check` a command that fails, so a statement added later without its own check
-can never pass by accident. It also writes `task/seed/STATEMENTS.md` with each statement's
-name, text and check, the guardrails and the allowed paths. Text that was already in
-`STATEMENTS.md` (the example task's spec, or your own) is never dropped silently: it is kept
-below the generated statements, under "Earlier text of this file", with its headings nested,
-and `--apply` says so. Keep what still describes the task (a detailed spec the checks do not
-cover is exactly what the agents need) and delete the rest before `setup.sh`;
-`--replace-statements` drops it instead. The allowed paths are not
-guessed from the guardrails' prose: `Do not modify any file outside out/` becomes
-`--allowed 'out/.*'` because you say so. A pattern that would let agents rewrite
-`STATEMENTS.md` is warned about.
-
-It touches nothing else in `task/` but the probe. Put the frozen files the checks need into
-`task/seed/`, and make `task/install.sh` install the checks' tools (or delete it).
-
-**The probe.** `from-goal.py` never writes `task/probe/`: it cannot know a right answer. A
-probe whose files the new allowed paths freeze (the example's `kit/roman.py` under
-`--allowed 'out/.*'`) cannot answer the new task, so `--apply` removes it and says so; any
-other probe is kept, and `--apply` names its files for you to confirm. Before `setup.sh`,
-pick one statement and write
-
-- `task/probe/good/`: the files of a right answer to it, laid out as in the repository
-  (for the item "`out/alpha.txt` holds ok", the file `task/probe/good/out/alpha.txt`
-  holding `ok`), so that the statement's check passes;
-- `task/probe/bad/`: the same files with a wrong answer, so that the check fails.
-
-A task from `from-goal.py` has no `task.attempted_if`, so `test_gateway.sh` then shows
-"the task's wrong answer is merged but not counted as done" (the merge job's report names
-the statement `FAILED`) and "the task's right answer is counted as done" (the statement
-moves into `landed.json`). Both must say PASS; the second fails when the probe answers no
-statement. Do not add `attempted_if` back just to make the test pass: it is right only when
-each statement has a file whose presence means it was attempted, and then a wrong answer is
-rejected instead. Without a probe `test_gateway.sh` says it skipped the step. Then follow
-`SKILL.md` from step 3.
-
-**How the checks run.** A statement in `task.checks` is checked with its own command,
-exactly as written (no `{name}` substitution, so shell braces such as `awk '{print $1}'`
-are safe); the others use `task.check`. The merge job, `verify.py` and the briefs all
-follow it. The command runs at the root of the merged tree in the merge job's sandbox: no
-network, no home directory, only `/usr`, `/etc`, `tools/` and `task.toolchain_paths`.
-Without `task.attempted_if` every statement is checked on every merge; a merge is rejected
-only when it breaks a statement that was already done, and a wrong answer to an open
-statement simply does not count. The merge job's report then names every statement's
-result (`checked: alpha ok; beta FAILED (...)`), so an agent sees what still fails.
-
-### 2. The boss's own condition
-
-The proof of the whole contract is the output of `harness/py harness/verify.py`: it clones
+The proof of the whole task is the output of `harness/py harness/verify.py`: it clones
 `main` fresh, runs every statement's own check in the merge job's sandbox, and confirms the
 frozen files are unchanged. The `/goal` evaluator reads conversation text only, so the
 boss must print that output. Under each statement that has its own check, `verify.py`
@@ -99,23 +29,7 @@ and `PASS` together. A condition that fits:
 Do not prove an item by running its command in a workspace: only `main` counts. Each turn
 of the loop is one round of `SKILL.md` step 6 (`wait-run.sh`, then act on what it printed).
 
-### 3. What the boss still owns
-
-The skipped items are about the runner's own record, not the work, so no agent can do them:
-
-| Skipped item | How the boss meets it |
-|---|---|
-| The claims file | Write it from `records/merges.jsonl`: each accepted merge (its `main` commit) is `verified` evidence for its statement once `verify.py` printed its PASS line; what a helper wrote on the board is `inherited` |
-| The ledger digest | One iteration is one `harness/wait-run.sh 540` cycle: `delegated` is the helpers, `new` is what landed in that cycle |
-
-The contract's `operating_mode` asks the runner to delegate to subagents. With a team, the
-helpers are the delegation: the boss starts no subagent to do a statement's work, and says
-so in the ledger rather than starting one to satisfy the wording. A subagent that only
-checks (reads the records, clones `main` and runs `verify.py`, compares the claims file with
-`merges.jsonl`) is sensible, and the boss in the live run used such checkers; name them in the
-ledger as checkers, not as delegated work.
-
-### 4. What to watch for
+### 2. What to watch for
 
 - **A pause is not the loop's to clear.** `/goal` keeps the boss working; it does not
   authorize `harness/boss.sh resume` without reading the blocked action (`SKILL.md`, step 6).
@@ -199,14 +113,10 @@ A boss under `/goal` (the live goal proof run, template at commit 7caf0a9, Claud
 2.1.332): its second attempt reached "Goal achieved" in 21.2 minutes over 3 turns, of which
 the team itself needed 3.0 minutes for 7 of 7 statements; the evaluator quoted `verify.py`'s
 "7 of 7 statements pass" as its evidence. The first attempt was paused by a safety classifier
-after the team was done (see "Not unattended" above). The same run wrote a task from a real
-make-goal contract with `from-goal.py`; its `--apply` then replaced the example's 72-line
-`STATEMENTS.md`, and the team built modules that pass the checks but miss the spec, which is
-why the earlier text is now kept.
+after the team was done (see "Not unattended" above).
 
 ## Not yet shown
 
 No agent has run `/goal` inside the team (`boss.sh slash` is tested with the stub tmux only).
-The kept earlier text and the probe handling of `from-goal.py`, the merge job's report
-without `attempted_if`, and `test_gateway.sh` on such a task are tested with stubs only
-(`tests/team/test_fixes.sh`, sections T and U).
+The merge job's report without `task.attempted_if`, and `test_gateway.sh` on such a task,
+are tested with stubs only (`tests/team/test_fixes.sh`, section T).

@@ -31,7 +31,7 @@ check "remote's session flags are open's" '^remote Bash,Edit,Read,Write,Glob,Gre
 # the network commands pass for remote, also in the forms other rules know
 for c in 'sftp sdfiana025' 'cd out && rsync -az ./ s3df:/sdf/data/x/' 'timeout 60 ssh -o BatchMode=yes sdfiana025 "ls /tmp"' \
          'curl -sSf https://example.com/a.tar.gz | tar xz' 'ssh sdfiana025 tmux ls' "ssh me@sdfiana025 'squeue -u me'" \
-         'wget -q https://localhost.example.org/x' 'bridge --session s write /tmp/a.txt'; do
+         'wget -q https://localhost.example.org/x'; do
   check "remote may: $c" '^$' bash_ h1 "$c"
 done
 # ... and are blocked for every other profile in the same unwalled run
@@ -80,7 +80,7 @@ setcfg sandbox false
 
 # the brief tells a remote agent what it may do, and only a remote agent
 check "the remote agent's brief has a Remote machines section" '^## Remote machines' sh -c "cd '$W' && python3 harness/render.py h1"
-check "it names the commands and the bridge" '`ssh`.*`bridge`' sh -c "cd '$W' && python3 harness/render.py h1"
+check "it names the network commands" '`ssh`.*`scp`.*`sftp`.*`rsync`.*`curl`.*`wget`' sh -c "cd '$W' && python3 harness/render.py h1"
 check "it warns against this machine" 'localhost' sh -c "cd '$W' && python3 harness/render.py h1"
 check "the rejoin brief has it too" '^## Remote machines' sh -c "cd '$W' && python3 harness/render.py h1 --resume"
 refute "an open agent's brief does not" 'Remote machines' sh -c "cd '$W' && python3 harness/render.py h2"

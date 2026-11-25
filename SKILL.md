@@ -70,12 +70,7 @@ Settings in `config.json`:
 | `extra_private_paths` | More paths to hide from the agents |
 | `extra_readable_home_paths` | Paths under the home directory's dot-folders to leave readable, beyond the short built-in list (for example `.cargo/bin`). Everything else there is hidden. |
 
-**From a make-goal contract.** If the user has a contract from the make-goal skill (`.goal/<slug>.json`), let it write the task instead of filling the tables by hand. Only a `deterministic` contract works, and only before `./setup.sh`:
-
-    harness/py harness/from-goal.py .goal/<slug>.json                          # prints the plan, writes nothing
-    harness/py harness/from-goal.py .goal/<slug>.json --apply --allowed 'out/.*'   # writes config.json and task/seed/STATEMENTS.md
-
-Each `done_when` item that names a command in backticks becomes a statement, checked by that command (`task.checks`). Items without one (the contract's claims and ledger items) are listed under `skipped`: they stay yours. Read every warning: a check such as `wc -l` exits 0 whatever it prints, so the merge job would accept anything; rewrite it in `config.json`. Turn the contract's guardrails into `--allowed` patterns yourself. Text already in `STATEMENTS.md` is kept below the generated statements (`--replace-statements` drops it): keep what still describes the task. Then fill `task/seed/`, `task/install.sh` and `task/probe/` as the first table says; `references/goal.md` says what the probe must hold for such a task, and why `test_gateway.sh` reports it as merged-but-not-counted. To run yourself under `/goal` while the team works, and for an agent that runs `/goal` itself, read `references/goal.md` first.
+To run yourself under `/goal` while the team works, and for an agent that runs `/goal` itself, read `references/goal.md` first.
 
 #### Time
 
@@ -106,7 +101,7 @@ A profile is a set of four knobs, each on or off:
 | `web` | `WebSearch`, `WebFetch` | The team is no longer offline. A page can carry instructions to the agent, and what the agent puts in a search or URL leaves the machine. |
 | `subagents` | `Agent` (subagents), and `SubagentHandback` from inside a subagent | A subagent works out of the agent's sight. Its tool calls pass the monitor and the sandbox like the agent's own, and get only the agent's own knobs. |
 | `skills` | `Skill`, and slash commands (no `--disable-slash-commands`) | The agent sees your installed skills, and `/loop` and `/goal` add a second control loop beside the harness's own. `boss.sh slash` works only where this is on. |
-| `shell_net` | A shell that may run `ssh`, `scp`, `sftp`, `rsync`, `curl`, `wget` (`profiles.NET_CMDS`; the `bridge` CLI needs nothing) | Only with `"sandbox": false`; `setup.sh` refuses it otherwise. Everything an unwalled run gives up, plus: the agent acts on other machines, where nothing here watches it. The monitor still refuses these commands aimed at this machine (`localhost`, its own name). Tested with stubs only. |
+| `shell_net` | A shell that may run `ssh`, `scp`, `sftp`, `rsync`, `curl`, `wget` (`profiles.NET_CMDS`) | Only with `"sandbox": false`; `setup.sh` refuses it otherwise. Everything an unwalled run gives up, plus: the agent acts on other machines, where nothing here watches it. The monitor still refuses these commands aimed at this machine (`localhost`, its own name). Tested with stubs only. |
 
 Every profile has `Bash`, `Edit`, `Read`, `Write`, `Glob`, `Grep`. The named profiles are
 presets, shortcuts for a knob set; each starts exactly the session it did before knobs existed:
@@ -117,7 +112,7 @@ presets, shortcuts for a knob set; each starts exactly the session it did before
 | `research` | `web` | Agents must read documentation or look things up |
 | `allied` | `web`, `subagents` | An agent has large reading or search jobs to hand off |
 | `open` | `web`, `subagents`, `skills` | An agent should run its own `/goal` or `/loop`, or use skills |
-| `remote` | all four | An agent must work on another machine (an HPC host through `bridge` or SSH); unwalled runs only |
+| `remote` | all four | An agent must work on another machine (for example over SSH); unwalled runs only |
 
 A profile value in `config.json` (`profile`, each value of `agent_profiles`, each value of
 `profiles`) is either a name (a preset, or a key of `profiles`) or a knob object: an optional
@@ -160,7 +155,7 @@ explains. Not yet shown live. `references/design.md` says what is enforced.
 #### Unwalled runs (`"sandbox": false`)
 
 Use `"sandbox": false` only when the user asks for it, for work that must reach other machines
-(SSH, the `bridge` CLI). Tell the user what it gives up before you set it. With the sandbox off:
+(for example over SSH). Tell the user what it gives up before you set it. With the sandbox off:
 
 - The monitor, the gateway, the merge job and the profiles work as before, and the merge job's
   check still runs in its own sandbox.
@@ -266,7 +261,6 @@ One boss can run several teams at once. Each team is its own copy of the templat
 | `harness/wait-run.sh [seconds]` | Blocks until the run completes, stalls, pauses, or times out. First line: the state word and the session, e.g. `DONE [<session>]` |
 | `harness/boss.sh status / trust / say <id or all> "<text>" / slash <id> "/<command>" / messages / resume / unstall / remove <id> / end` | The boss's controls. `messages` prints every message the agents sent each other; `slash` types a slash command into the window of an agent with the `skills` knob on; `unstall` reopens a stalled run. Every line it prints by itself starts with `[<session>] ` (`say` prints `[<session>] typed into <id>: <text>`); `status` starts with `[<session>] <work dir>`. |
 | `harness/py harness/verify.py` | Checks every statement on a fresh checkout of `main` |
-| `harness/py harness/from-goal.py <contract> [--apply --allowed <regex> ...]` | Turns a make-goal contract into the task, before `setup.sh` |
 | `harness/py harness/offline_monitor.py` | Summary of the run's records |
 | `harness/py harness/report.py [-o FILE]`, `--records DIR` | One HTML page showing what the run did; works before, during and after a run, and on an unpacked archive's `records/` |
 | `./teardown.sh [--archive [DIR] \| --purge]` | Stops the session and the gateway; `--archive` seals the repository and records into one dated file in DIR and then deletes the run's files; `--purge` deletes them without keeping anything |
@@ -293,4 +287,4 @@ One boss can run several teams at once. Each team is its own copy of the templat
 
 - `references/design.md`: why each part exists, what is enforced and what is only requested, and how to adapt the design to a different environment.
 - `references/claude-code.md`: which Claude Code feature implements each part, and its quirks.
-- `references/goal.md`: a make-goal contract as the team's task, the boss under `/goal` (its proof is the output of `harness/verify.py`), and an agent that runs `/goal` for its own part.
+- `references/goal.md`: how to run `/goal` with the team: the boss under `/goal` (its proof is the output of `harness/verify.py`), and an agent that runs `/goal` for its own part.
