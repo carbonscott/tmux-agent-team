@@ -180,4 +180,13 @@ check "M sealed: the neighbour probed in step 4 is a helper" '"command": "ls \.\
 check "M an unknown agent is refused" 'no agent h9' selftest h9
 fi
 
+# ---- N: test_gateway.sh leaves no stall clock behind
+if want N; then
+mk_workdir lead h1 h2; setup_wd
+( cd "$W" && harness/test_gateway.sh ) > "$TOP/tg.out" 2>&1 && ok "N test_gateway.sh passes" || no "N test_gateway.sh passes" "$(cat "$TOP/tg.out")"
+refute "N state/stall_from is reset" . sh -c "ls '$W/state/stall_from' 2>/dev/null"
+refute "N boss.sh status shows no stall clock before launch" 'stall clock' sh -c "cd '$W' && harness/boss.sh status"
+refute "N nor anything the probe merge left" 'heartbeat|ci/' sh -c "ls '$W/state/heartbeat' 2>/dev/null; ls '$W/state/ci' 2>/dev/null"
+fi
+
 finish

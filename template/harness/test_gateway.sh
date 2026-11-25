@@ -58,5 +58,6 @@ kill $GW 2>/dev/null; wait $GW 2>/dev/null
 rm -f state/board.db state/board.db-wal state/board.db-shm state/c1.out state/c2.out
 git -C central.git update-ref refs/heads/main "$(cat state/seed_sha)"; git -C central.git branch -q -D "agent/$H1" 2>/dev/null
 ( cd "$R/ws/$H1" && git fetch -q origin && git reset -q --hard origin/main && git clean -qfd )
-rm -f records/*.jsonl state/gw-test.log state/deadline; echo '[]' > state/landed.json
+# the probe merge set the stall clock and the gateway beat: neither belongs to a run yet
+rm -f records/*.jsonl state/gw-test.log state/deadline state/stall_from state/heartbeat; echo '[]' > state/landed.json
 echo "$ok passed, $bad failed"; [ $bad -eq 0 ]
