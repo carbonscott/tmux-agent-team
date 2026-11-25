@@ -17,7 +17,7 @@ case "${1:-status}" in
   status) python3 "$R/harness/board.py" --brief
           echo "profiles: $(python3 "$R/harness/profiles.py" --list)"
           st=$(python3 "$R/harness/runstate.py"); case "$st" in INTERRUPTED*|ended*) echo "== $st";; esac
-          [ -e "$R/state/HALT" ] && { echo "blocked action:"; python3 -m json.tool "$R/state/HALT"; };;
+          [ -e "$R/state/HALT" ] && { echo "blocked action:"; python3 -m json.tool "$R/state/HALT"; }; true;;
   trust)  # waits up to 30 s: for each prompt to appear (so it can be run right after launch), and,
           # once answered, for the session to be seen running (its name team-<id> on screen)
           todo=" $(cfg agents) "; for a in $todo; do [ -e "$R/state/removed/$a" ] && todo=${todo/ $a / }; done

@@ -465,4 +465,12 @@ for a in lead h1; do
 done
 fi
 
+# ---- S: boss.sh status exits 0 whether or not the team is paused
+if want S; then
+mk_workdir lead h1; setup_wd; launch >/dev/null 2>&1
+( cd "$W" && harness/boss.sh status ) >/dev/null 2>&1 && ok "S boss.sh status exits 0 when the team is not paused" || no "S boss.sh status exits 0 when the team is not paused"
+echo '{"ts": 0, "agent": "h1", "reason": "test"}' > "$W/state/HALT"
+( cd "$W" && harness/boss.sh status ) >/dev/null 2>&1 && ok "S and when it is paused" || no "S and when it is paused"
+fi
+
 finish
