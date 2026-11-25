@@ -487,4 +487,16 @@ date +%s > "$W/state/DONE"
 wait_for 5 sh -c "! kill -0 $pr 2>/dev/null" && ok "Q the loop ends when the run is complete" || { no "Q the loop ends when the run is complete"; kill $pr; }
 fi
 
+# ---- O: during a pause, the stall clock shows its value at the start of the pause
+if want O; then
+mk_workdir lead h1; setcfg stall_min 4; setup_wd; launch >/dev/null 2>&1
+python3 -c "
+import json, time; now = time.time()
+open('$W/state/stall_from', 'w').write(str(now - 300))         # 5 min now
+json.dump(dict(ts=now - 120, agent='h1', reason='test'), open('$W/state/HALT', 'w'))   # 3 min when the pause began"
+out=$(cd "$W" && harness/boss.sh status)
+check "O paused: the stall clock shows 3 of 4 min, not 5" 'stall clock: 3 of 4 min' echo "$out"
+check "O and says it stopped at the pause" 'stall clock: 3 of 4 min.*stopped at the start of the pause' echo "$out"
+fi
+
 finish
