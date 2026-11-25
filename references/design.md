@@ -66,9 +66,10 @@ orders are, which keeps the briefs short and shows that the board carries everyt
 
 Not yet exercised in any run: any profile other than `sealed` (only stub-based tests have
 started one), WebFetch through a `web-fetch` subagent, splitting a task, moving a helper between crews, the
-five-minute reminder, a slow check, a helper dying mid-task, teams larger than four, and
+five-minute reminder, a slow check, a helper dying mid-task, teams larger than four,
 resuming a run after a real crash (`launch.sh --resume` has run only against stub tmux and
-claude).
+claude), archiving a real run (`teardown.sh --archive`), and the run report (`report.py`) on a
+real run's records.
 
 ## Resuming after a crash
 
@@ -157,6 +158,16 @@ done, not verified`), and then deletes the rest. "Verified" is judged by running
 `verify.py` when the archive is made, not taken from the merge job's word. `--purge`
 remains for runs with nothing to keep; it is not offered where unverified work may be
 lost, such as after a crash.
+
+## Reading a run afterwards
+
+`harness/offline_monitor.py` is text for the boss to scan for trouble. `harness/report.py` is
+a page for the owner: it shows at a glance how much was done, a timeline of the run to scale
+(each agent's activity, every merge, block, pause, removal and time down), and the tables
+behind it. It reads `config.json`, `state/` and `records/` and writes nothing else, so it
+can be run at any time. It is one file with no external scripts, styles or fonts, so it can
+be mailed or opened offline, and everything taken from the records is escaped: a merge title
+or a blocked command is text an agent wrote, and the page must not run it.
 
 ## Lessons from building it
 
