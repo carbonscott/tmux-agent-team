@@ -135,7 +135,8 @@ Use `"sandbox": false` only when the user asks for it, for work that must reach 
 
 `setup.sh` and `launch.sh` print a warning, `boss.sh status` prints an `unwalled` line, and the
 run's page and the archive's `STATUS.txt` say `unwalled`. `selftest.sh` skips its wall steps
-(3 to 7 and 13) and tests only the monitor. A resumed run reads `config.json` again: do not
+(3 to 7 and 13) and its `allowed_domains` step (with the sandbox off Claude Code offers no such
+parameter), and tests only the monitor. Each agent's brief gains a section saying the run is unwalled. A resumed run reads `config.json` again: do not
 change the flag before `--resume`.
 
 ### 3. Set up

@@ -117,4 +117,13 @@ check "a walled archive was written" . ls "$d/STATUS.txt"
 refute "a walled archive's STATUS.txt does not say unwalled" -i 'unwalled' cat "$d/STATUS.txt"
 check "and its run.json says the sandbox was on" '"sandbox": true' cat "$d/records/run.json"
 
+# found by the live proof run: the briefs and selftest's network step in an unwalled run
+mk_workdir lead h1; setcfg sandbox false; setup_wd
+check  "an unwalled brief says the run is unwalled" '^## This run is unwalled' sh -c "cd '$W' && python3 harness/render.py h1"
+check  "and the lead's too" '^## This run is unwalled' sh -c "cd '$W' && python3 harness/render.py lead"
+out=$(cd "$W" && timeout 60 harness/selftest.sh h1 </dev/null 2>&1)
+check  "unwalled selftest skips the allowed_domains step instead of failing it" '^SKIP  step [0-9]+ \(allowed_domains\)' echo "$out"
+refute "and reports no FAIL for it" 'FAIL  a Bash call with allowed_domains' echo "$out"
+mk_workdir lead h1; setup_wd
+refute "a walled brief has no unwalled section" 'This run is unwalled' sh -c "cd '$W' && python3 harness/render.py h1"
 finish

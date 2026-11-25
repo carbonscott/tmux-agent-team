@@ -60,6 +60,15 @@ for key, value in {
     "{CHECK}": check,
 }.items():
     text = text.replace(key, value)
+# An unwalled run: the Sandbox limit above describes walls this run does not have. Say so, and that
+# its rules still hold (the monitor checks them), so no agent reads "no network" as a fact here.
+if cfg.get("sandbox", True) is False:
+    tail += ("\n## This run is unwalled\n\n"
+             "The owner turned the shell sandbox off for this run (config.json `\"sandbox\": false`). The "
+             "Sandbox limit above is no longer a wall: your shell can technically reach the network and "
+             "files outside your workspace. The rules still hold all the same. Keep to your workspace, use "
+             "only `team` for the board and `main`, and use no network unless your profile below says so. "
+             "The action monitor still checks every command and pauses the team on a violation.\n")
 # An agent on the remote profile (only in a run with the sandbox off) may reach other machines:
 # its brief says so, and which of the limits above still hold.
 if ((cfg.get("agent_profiles") or {}).get(agent) or cfg.get("profile")) == "remote":
