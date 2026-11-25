@@ -77,7 +77,7 @@ places where the runbook was vague, and those were fixed before publishing.
 **Not yet shown.** The example task is easy, so no run has had to split a task, move a
 helper between crews, reach the five-minute reminder, or survive a helper dying. The model
 classifier has never blocked anything. No team larger than four has been run, and no task
-other than the example. No boss has run under `/goal`.
+other than the example.
 
 ## Limits
 

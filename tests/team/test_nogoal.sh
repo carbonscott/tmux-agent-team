@@ -39,6 +39,6 @@ check "design.md keeps the boss under /goal as requested only" '^\| The boss und
 refute "nothing says the converter was removed" -i 'no longer (converts|writes a task)|used to (convert|write)' cat SKILL.md README.md references/design.md references/goal.md references/claude-code.md
 
 # test_gateway.sh: the comment, and its logic unchanged
-check "test_gateway.sh's comment names a task without task.attempted_if" 'Without it \(a task without `task\.attempted_if`\)' cat template/harness/test_gateway.sh
+check "test_gateway.sh's comment says what happens without task.attempted_if" 'Without it, every statement' cat template/harness/test_gateway.sh
 check "test_gateway.sh still reads attempted_if" "get\('attempted_if'\)" cat template/harness/test_gateway.sh
 finish

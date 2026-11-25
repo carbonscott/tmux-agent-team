@@ -217,8 +217,7 @@ refuses. That rule reads the command text and is easy to get past (an alias in `
 an address the rule does not list): it guards against mistakes, as everything does in an
 unwalled run. `allowed_domains` means nothing with the sandbox off, so with `shell_net` it is
 refused without a pause. What the agent does on the other machine is out of the monitor's
-sight: it sees the command line, not what runs there. Tested with stubs
-only.
+sight: it sees the command line, not what runs there. Tested with stubs only.
 
 ## Adapting it
 
