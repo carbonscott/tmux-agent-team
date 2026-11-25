@@ -193,14 +193,31 @@ def pct(t, t0, t1):
     return max(0.0, min(100.0, (t - t0) * 100.0 / (t1 - t0)))
 
 
+def lay_out(labels, track):
+    """Rows for labels on one lane, so that none overlaps another on a track `track` px wide or
+    wider. labels: [(left in %, width in px)] in time order. Returns [(row, shift)] where shift
+    is the label's CSS translateX: centred on its moment, or starting or ending there at the
+    edges. Widths are estimated on the generous side (7 px a character)."""
+    out, ends = [], []
+    for x, w in labels:
+        at = x * track / 100.0
+        shift = "0%" if at - w / 2 < 0 else "-100%" if at + w / 2 > track else "-50%"
+        a = at - {"0%": 0, "-100%": w}.get(shift, w / 2)
+        row = next((i for i, end in enumerate(ends) if end + 4 <= a), len(ends))
+        ends[row:row + 1] = [a + w]
+        out.append((row, shift))
+    return out
+
+
 def timeline(g):
     if not g["started"]:
         return '<p class="muted">The run has not been launched yet, so there is no timeline.</p>'
     t0, t1 = window(g)
     total = t1 - t0
     step = next(s for s in (60, 120, 300, 600, 900, 1800, 3600, 7200, 14400) if total / s <= 8)
-    ticks = "".join('<span class="tick" style="left:%.3f%%">%d:%02d</span>' % (pct(t0 + k, t0, t1), k // 3600, k % 3600 // 60)
-                    for k in range(0, int(total) + 1, step))
+    ticks = "".join('<span class="tick%s" style="left:%.3f%%">%d:%02d</span>' % (
+        " odd" if i % 2 else "", pct(t0 + k, t0, t1), k // 3600, k % 3600 // 60)
+        for i, k in enumerate(range(0, int(total) + 1, step)))
     over = []
     for p in g["pauses"]:
         a, b = p["ts"], p["end"] or t1
@@ -220,16 +237,25 @@ def timeline(g):
         over.append('<i class="rule deadline" style="left:%.3f%%" title="deadline %s"></i>' % (
             pct(g["deadline"], t0, t1), e(clock(g["deadline"]))))
     rows = []
-    # the run lane: when each statement became done
-    seen, marks = set(), []
+    # the run lane: when each statement became done. Names on a wide screen, numbers keyed below on
+    # a phone; each label goes in the first row where it overlaps nothing (see lay_out)
+    seen, done = set(), []
     for m in g["merges"]:
         new = [s for s in m.get("landed", []) if s not in seen]
         seen.update(new)
         if new:
-            marks.append('<b class="m done" style="left:%.3f%%" title="%s">%s</b>' % (
-                pct(m["ts"], t0, t1), e("%s done at %s (+%s) by %s" % (" ".join(new), clock(m["ts"]), span(m["ts"] - t0),
-                                                                   m.get("agent"))), e(" ".join(new))))
-    rows.append('<div class="lane run"><div class="who">done</div><div class="track">%s</div></div>' % "".join(marks))
+            done.append((pct(m["ts"], t0, t1), " ".join(new), m))
+    wide = lay_out([(x, len(t) * 7.0 + 12) for x, t, _ in done], 460)
+    narrow = lay_out([(x, len(str(k + 1)) * 7.0 + 12) for k, (x, _, _) in enumerate(done)], 260)
+    marks, key = [], []
+    for k, (x, text, m) in enumerate(done):
+        tip = e("%s done at %s (+%s) by %s" % (text, clock(m["ts"]), span(m["ts"] - t0), m.get("agent")))
+        marks.append('<i class="dt" style="left:%.3f%%"></i>' % x)
+        marks.append('<b class="m done" style="left:%.3f%%;--r:%d;--x:%s" title="%s">%s</b>' % (x, wide[k][0], wide[k][1], tip, e(text)))
+        marks.append('<b class="m num" style="left:%.3f%%;--r:%d;--x:%s" title="%s">%d</b>' % (x, narrow[k][0], narrow[k][1], tip, k + 1))
+        key.append("<li><b>%d</b> %s <span>+%s, %s</span></li>" % (k + 1, e(text), e(span(m["ts"] - t0)), e(m.get("agent"))))
+    rows.append('<div class="lane run" style="--rows:%d;--nrows:%d"><div class="who">done</div><div class="track">%s</div></div>'
+                % (1 + max([r for r, _ in wide] or [0]), 1 + max([r for r, _ in narrow] or [0]), "".join(marks)))
     bins = 48
     for a in AGENTS:
         cnt = [0] * bins
@@ -263,8 +289,9 @@ def timeline(g):
             '<span><b class="k blk"></b>blocked action</span><span><i class="k act"></i>tool calls</span>'
             '<span><i class="k pause"></i>paused</span><span><i class="k down"></i>down (before a resume)</span>'
             '<span><i class="k gone"></i>removed</span><span><i class="k stall"></i>stall / deadline</span></p>'
-            '<p class="muted">Start %s, axis in h:mm since launch, %s shown. Hover a mark for details.</p>' % (
-                ticks, "".join(rows), "".join(over), clock(t0), span(total)))
+            '%s<p class="muted">Start %s, axis in h:mm since launch, %s shown. Hover a mark for details.</p>' % (
+                ticks, "".join(rows), "".join(over), '<ol class="dkey">%s</ol>' % "".join(key) if key else "",
+                clock(t0), span(total)))
 
 
 def table(head, rows, empty):
@@ -448,8 +475,15 @@ th{color:var(--mut);font-weight:600;white-space:nowrap}td code{font-size:.8rem;w
 .m{position:absolute;top:6px;width:14px;height:14px;margin-left:-7px;border-radius:50%;border:2px solid var(--card)}
 .m.ok{background:var(--ok)}.m.no{background:var(--no);border-radius:2px;transform:rotate(45deg)}
 .m.blk{background:var(--warn);border-radius:2px}
-.m.done{width:auto;height:auto;border-radius:4px;background:var(--okbg);color:var(--onok);padding:0 4px;font-weight:600;
-transform:translateX(-50%);margin-left:0;top:4px;font-size:.72rem;border:0;white-space:nowrap}
+.m.done,.m.num{width:auto;height:18px;line-height:18px;border-radius:4px;background:var(--okbg);color:var(--onok);
+padding:0 5px;font-weight:600;transform:translateX(var(--x,-50%));margin-left:0;top:calc(4px + var(--r,0) * 20px);
+font-size:.72rem;border:0;white-space:nowrap;z-index:1}
+.m.num{display:none;min-width:18px;text-align:center;padding:0 4px}
+.lane.run .track{height:calc(var(--rows,1) * 20px + 8px)}
+.dt{position:absolute;top:0;bottom:0;border-left:1px solid var(--okbg);opacity:.4}
+.dkey{display:none;list-style:none;padding:0;margin:10px 0 2px;flex-wrap:wrap;gap:4px 14px;font-size:.8rem}
+.dkey b{display:inline-block;min-width:18px;text-align:center;border-radius:4px;background:var(--okbg);color:var(--onok);
+padding:0 4px;margin-right:3px;font-size:.72rem}.dkey span{color:var(--mut)}
 .track .gone{position:absolute;top:0;bottom:0;right:0;background:repeating-linear-gradient(45deg,transparent 0 4px,var(--down) 4px 8px)}
 .band{position:absolute;top:0;bottom:0}.band.pause{background:var(--pause)}
 .band.down{background:repeating-linear-gradient(135deg,var(--down) 0 6px,transparent 6px 12px)}
@@ -464,6 +498,8 @@ transform:translateX(-50%);margin-left:0;top:4px;font-size:.72rem;border:0;white
 #theme{position:fixed;top:10px;right:10px;background:var(--card);color:var(--fg);border:1px solid var(--line);
 border-radius:16px;padding:3px 10px;font:inherit;font-size:.8rem;cursor:pointer}
 @media (max-width:600px){main{padding:12px 10px 40px}.tl{--who:3rem}.big .n{font-size:1.7rem}header{padding-right:56px}}
+@media (max-width:600px){.m.done{display:none}.m.num{display:block}.dkey{display:flex}
+.lane.run .track{height:calc(var(--nrows,1) * 20px + 8px)}.tick.odd{display:none}}
 @media print{#theme{display:none}}
 """.replace("DARK", DARK)
 

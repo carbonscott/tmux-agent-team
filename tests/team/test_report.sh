@@ -21,6 +21,28 @@ for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
 print("\n".join(bad) or "ok")
 PY
 }
+# Labels on the timeline's done lane that overlap, at the narrowest track each kind is shown on:
+# names (desktop, track >= 460 px) and numbers (phone, track >= 260 px), ~6.5 px per character
+overlaps() { python3 - "$1" <<'PY'
+import re, sys
+page = open(sys.argv[1]).read()
+bad = []
+for cls, track, pad in (("done", 460, 8), ("num", 260, 10)):
+    marks = []
+    for style, text in re.findall(r'<b class="m %s" style="([^"]*)"[^>]*>([^<]*)</b>' % cls, page):
+        v = dict(re.findall(r"([\w-]+):([^;]+)", style))
+        x, w = float(v["left"].rstrip("%")) * track / 100, max(16, 6.5 * len(text) + pad)
+        a = x + float(v.get("--x", "-50%").rstrip("%")) / 100 * w
+        marks.append((int(v.get("--r", 0)), a, a + w, text))
+    if len(marks) < 5:
+        bad.append("only %d %s labels" % (len(marks), cls))
+    for i, (r, a, b, t) in enumerate(marks):
+        for r2, a2, b2, t2 in marks[i + 1:]:
+            if r == r2 and a < b2 and a2 < b:
+                bad.append("%s labels %s and %s overlap" % (cls, t, t2))
+print("\n".join(bad) or "ok")
+PY
+}
 # contrast of text on its background, light and dark theme, for the rules named:  contrast FILE 'selector' ...
 contrast() { python3 - "$@" <<'PY'
 import re, sys
@@ -164,4 +186,18 @@ check "the time a run took is its running time: wall time less pauses and time d
 check "the time stopped is stated beside it" 'paused 5m 00s, down 10m 00s' echo "$p"
 check "boss.sh status gives the running time of a finished run" 'RUN COMPLETE in 35.0 min' sh -c "cd '$W' && harness/boss.sh status"
 check "and the time stopped" 'paused 5.0 min, down 10.0 min' sh -c "cd '$W' && harness/boss.sh status"
+
+# five statements done within one minute of a ten-minute run: every label stays legible
+mk_workdir lead h1 h2; setcfg task.statements '["alpha", "beta", "gamma", "delta", "epsilon"]'; mkdir -p "$W/state" "$W/records"
+python3 -c "
+import json, time; b = int(time.time()) - 900; names = ['alpha', 'beta', 'gamma', 'delta', 'epsilon']
+open('$W/state/started', 'w').write(str(b)); open('$W/state/deadline', 'w').write(str(b + 1800))
+with open('$W/records/merges.jsonl', 'w') as f:
+    for k, n in enumerate(names):
+        f.write(json.dumps(dict(ts=b + 300 + 15 * k, agent='h1', title=n, landed=names[:k + 1])) + '\n')
+open('$W/state/DONE', 'w').write(str(b + 600)); json.dump(names, open('$W/state/landed.json', 'w'))"
+p=$(rep)
+check "five done labels within a minute do not overlap, as names or as numbers" '^ok$' overlaps "$TOP/r.html"
+check "the numbers are keyed to the statements, in order" '<ol class="dkey">.*alpha.*beta.*gamma.*delta.*epsilon' echo "$p"
+check "the narrow layout shows numbers and the key instead of names" '@media \(max-width:600px\)\{\.m\.done\{display:none\}' echo "$p"
 finish
