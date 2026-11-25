@@ -21,6 +21,36 @@ for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
 print("\n".join(bad) or "ok")
 PY
 }
+# contrast of text on its background, light and dark theme, for the rules named:  contrast FILE 'selector' ...
+contrast() { python3 - "$@" <<'PY'
+import re, sys
+css = re.search(r"<style>(.*?)</style>", open(sys.argv[1]).read(), re.S).group(1)
+light = dict(re.findall(r"--([\w-]+):([^;}]+)", re.search(r"(?m)^:root\{(.*?)\}", css, re.S).group(1)))
+dark = dict(light, **dict(re.findall(r"--([\w-]+):([^;}]+)", re.search(r":root\[data-theme=dark\]\{(.*?)\}", css, re.S).group(1))))
+def lum(h):
+    c = [int(h[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    c = [x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+def val(v, theme):
+    v = v.strip()
+    while v.startswith("var("):
+        v = theme[v[6:-1]].strip()
+    return {"#fff": "#ffffff", "#000": "#000000"}.get(v, v)
+low = []
+for sel in sys.argv[2:]:
+    decl = {}
+    for s, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+        if sel in [x.strip() for x in s.split(",")]:
+            decl.update(re.findall(r"([\w-]+):([^;]+)", body))
+    for name, theme in (("light", light), ("dark", dark)):
+        fg, bg = val(decl["color"], theme), val(decl.get("background", "var(--bg)"), theme)
+        a, b = sorted((lum(fg), lum(bg)))
+        r = (b + 0.05) / (a + 0.05)
+        if r < 4.5:
+            low.append("%s in %s: %s on %s is %.2f:1" % (sel, name, fg, bg, r))
+print("\n".join(low) or "ok")
+PY
+}
 
 # ---- before setup.sh has run: no state, no records
 mk_workdir lead h1 h2
@@ -110,4 +140,8 @@ check "SKILL.md puts the report in the finish steps" 'report\.py' cat "$REPO/SKI
 
 # ---- found by the live proof run
 check "the legend's swatches stay in the legend (no lane rule matches them)" '^ok$' swatches "$TOP/r.html"
+check "text on green (statement chips, done labels) has 4.5:1 contrast in both themes" '^ok$' \
+  contrast "$TOP/r.html" '.chips li.on' '.m.done'
+check "the state word (COMPLETE, STALLED, PAUSED, RUNNING) has 4.5:1 contrast in both themes" '^ok$' \
+  contrast "$TOP/r.html" '.good .s' '.bad .s' '.warn .s' '.live .s'
 finish

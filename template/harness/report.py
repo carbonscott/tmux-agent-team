@@ -366,14 +366,17 @@ msgs: sent / received.</p></section>
                e("Run report %s: %d of %d done" % (CFG.get("session", ""), n, m)), CSS, body, JS)
 
 
+# Text on green uses --okbg/--onok, and state words their own --*t colours: each pair is at least
+# 4.5:1 in both themes (light: white on #187a44 5.4:1; dark: #0b1f14 on #3ccf7a 8.5:1).
+DARK = """--bg:#15171a;--fg:#e6e6e3;--mut:#9aa0a8;--card:#1e2125;--line:#30343a;--ok:#3ccf7a;--no:#ff6b6b;--warn:#f0b429;
+--live:#63a4ff;--act:#63a4ff;--pause:rgba(240,180,41,.22);--down:rgba(154,160,168,.25);--chip:#2a2e33;--okbg:#3ccf7a;
+--onok:#0b1f14;--okt:#3ccf7a;--not:#ff6b6b;--warnt:#f0b429"""
 CSS = """
-:root{--bg:#f7f7f5;--fg:#1d1f21;--mut:#6b6f76;--card:#fff;--line:#e2e2de;--ok:#1f9d55;--no:#d64545;--warn:#c98a00;
---live:#2b6cb0;--act:#2b6cb0;--pause:rgba(201,138,0,.22);--down:rgba(107,111,118,.28);--chip:#ecece8}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#15171a;--fg:#e6e6e3;--mut:#9aa0a8;--card:#1e2125;
---line:#30343a;--ok:#3ccf7a;--no:#ff6b6b;--warn:#f0b429;--live:#63a4ff;--act:#63a4ff;--pause:rgba(240,180,41,.22);
---down:rgba(154,160,168,.25);--chip:#2a2e33}}
-:root[data-theme=dark]{--bg:#15171a;--fg:#e6e6e3;--mut:#9aa0a8;--card:#1e2125;--line:#30343a;--ok:#3ccf7a;--no:#ff6b6b;
---warn:#f0b429;--live:#63a4ff;--act:#63a4ff;--pause:rgba(240,180,41,.22);--down:rgba(154,160,168,.25);--chip:#2a2e33}
+:root{--bg:#f7f7f5;--fg:#1d1f21;--mut:#62666d;--card:#fff;--line:#e2e2de;--ok:#1f9d55;--no:#d64545;--warn:#c98a00;
+--live:#2b6cb0;--act:#2b6cb0;--pause:rgba(201,138,0,.22);--down:rgba(107,111,118,.28);--chip:#ecece8;--okbg:#187a44;
+--onok:#fff;--okt:#187a44;--not:#b83a3a;--warnt:#8a5d00}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){DARK}}
+:root[data-theme=dark]{DARK}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 main{max-width:1100px;margin:0 auto;padding:20px 16px 48px}
@@ -382,12 +385,12 @@ h1{font-size:1.5rem;margin:0}h2{font-size:1.1rem;margin:0 0 10px}
 header{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
 .big{text-align:right}.big .n{display:block;font-size:2.2rem;font-weight:700;line-height:1}
 .big .s{font-weight:600;letter-spacing:.04em;font-size:.85rem}
-.good .s{color:var(--ok)}.bad .s{color:var(--no)}.warn .s{color:var(--warn)}.live .s{color:var(--live)}.idle .s{color:var(--mut)}
+.good .s{color:var(--okt)}.bad .s{color:var(--not)}.warn .s{color:var(--warnt)}.live .s{color:var(--live)}.idle .s{color:var(--mut)}
 .bar{height:8px;background:var(--chip);border-radius:4px;margin:14px 0 10px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--ok)}
 .chips{list-style:none;padding:0;margin:0 0 14px;display:flex;flex-wrap:wrap;gap:6px}
 .chips li{padding:2px 10px;border-radius:12px;font-size:.85rem;background:var(--chip);color:var(--mut)}
-.chips li.on{background:var(--ok);color:#fff}
+.chips li.on{background:var(--okbg);color:var(--onok)}
 .facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:0 0 18px}
 .facts div{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
 .facts dt{color:var(--mut);font-size:.75rem;text-transform:uppercase;letter-spacing:.05em}.facts dd{margin:0;font-weight:600}
@@ -410,7 +413,7 @@ th{color:var(--mut);font-weight:600;white-space:nowrap}td code{font-size:.8rem;w
 .m{position:absolute;top:6px;width:14px;height:14px;margin-left:-7px;border-radius:50%;border:2px solid var(--card)}
 .m.ok{background:var(--ok)}.m.no{background:var(--no);border-radius:2px;transform:rotate(45deg)}
 .m.blk{background:var(--warn);border-radius:2px}
-.m.done{width:auto;height:auto;border-radius:4px;background:var(--ok);color:#fff;padding:0 4px;font-weight:600;
+.m.done{width:auto;height:auto;border-radius:4px;background:var(--okbg);color:var(--onok);padding:0 4px;font-weight:600;
 transform:translateX(-50%);margin-left:0;top:4px;font-size:.72rem;border:0;white-space:nowrap}
 .track .gone{position:absolute;top:0;bottom:0;right:0;background:repeating-linear-gradient(45deg,transparent 0 4px,var(--down) 4px 8px)}
 .band{position:absolute;top:0;bottom:0}.band.pause{background:var(--pause)}
@@ -427,7 +430,7 @@ transform:translateX(-50%);margin-left:0;top:4px;font-size:.72rem;border:0;white
 border-radius:16px;padding:3px 10px;font:inherit;font-size:.8rem;cursor:pointer}
 @media (max-width:600px){main{padding:12px 10px 40px}.tl{--who:3rem}.big .n{font-size:1.7rem}header{padding-right:56px}}
 @media print{#theme{display:none}}
-"""
+""".replace("DARK", DARK)
 
 JS = """(function(){var b=document.createElement('button');b.id='theme';b.type='button';b.textContent='theme';
 b.title='switch between the light and the dark theme';b.onclick=function(){var r=document.documentElement;
