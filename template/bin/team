@@ -16,6 +16,8 @@ USAGE = """usage:
   team sql "<SQL>"            run SQL on the team board; me() is your identity
   team sql -f FILE | team sql -     SQL from a file / stdin
   team push                   publish your committed HEAD to branch agent/<you>
+  team precheck [--quick]     ask the merge job what it would say about your HEAD now; lands nothing
+                              (--quick: only whether it merges cleanly and touches allowed paths)
   team mr "<title>"           push, then ask the merge job to land it on main
   team wait <seconds>         sleep (max 110), then print status
   team msg <agent|all> "<text>"   send a message to one agent, or to all; text - reads stdin
@@ -83,6 +85,8 @@ def main(argv):
         return call("sql", 40, sql=q)
     if cmd == "push":
         return call("push", 60)
+    if cmd == "precheck":
+        return call("precheck", 400, quick="--quick" in args)
     if cmd == "mr":
         return call("mr", 400, title=" ".join(args) or "(no title)")
     if cmd == "msg":

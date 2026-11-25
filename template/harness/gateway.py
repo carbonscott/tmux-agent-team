@@ -7,6 +7,7 @@ outside its own workspace (the shell sandbox and the action-monitor hook forbid 
 Relays:  sql    -> the shared SQLite board; me() returns the caller's identity
          push   -> central.git refs/heads/agent/<id>   (own branch only)
          mr     -> merge job: lands on main only if the task's check accepts it
+         precheck -> the merge job's verdict on the caller's HEAD, without landing it
          msg    -> a message to one agent or to all, stored in the board's `messages` table
          inbox  -> the caller's messages; unread ones are marked read
 Every request is appended to records/gateway.jsonl. Standard library only.
@@ -396,6 +397,57 @@ def do_mr(agent, title):
             git("worktree", "prune", cwd=CENTRAL)
 
 
+def do_precheck(agent, quick=False):
+    """The merge job's verdict on the caller's HEAD, without landing it: the same merge, path
+    rule and checks as do_mr, run in a private clone of main that is then deleted. It writes
+    nothing in central.git (not even the agent's branch) and does not take the merge lock, so
+    it never delays a real merge. quick: stop after the merge and the path rule, which answers
+    "will it conflict?" in about a second."""
+    ws = "%s/ws/%s" % (R, agent)
+    rc, head = git("rev-parse", "HEAD", cwd=ws)
+    if rc:
+        return 1, "precheck failed: " + head
+    _, main = git("rev-parse", "refs/heads/main", cwd=CENTRAL)
+    _, dirty = git("status", "--porcelain", cwd=ws)
+    msg = "precheck of your HEAD %s against main %s%s" % (head[:10], main[:10], (
+        "\nWARNING: uncommitted changes are not part of it:\n" + dirty[:600]) if dirty else "")
+    no = msg + "\nPRECHECK FAILED: the merge job would reject this now (nothing was landed).\n"
+    tree = "%s/ci/pre-%s" % (STATE, uuid.uuid4().hex[:12])
+    try:
+        rc, out = git("clone", "-q", "--shared", "--no-checkout", CENTRAL, tree)
+        if not rc:
+            rc, out = git("checkout", "-q", "--detach", main, cwd=tree)
+        if not rc:
+            rc, out = git("fetch", "--no-tags", "--quiet", ws, head, cwd=tree)
+        if rc:
+            return 1, "precheck error: " + out
+        if git("merge-base", "--is-ancestor", head, main, cwd=tree)[0] == 0:
+            return 1, no + "Nothing new: your HEAD is already contained in main."
+        rc, out = git("-c", "user.name=merge-job", "-c", "user.email=merge-job@team.local", "merge", "--no-ff",
+                      "-m", "precheck", head, cwd=tree)
+        if rc:
+            _, files = git("diff", "--name-only", "--diff-filter=U", cwd=tree)
+            return 1, (no + "Merge conflict with main in: %s\nFix: git fetch origin main && git merge origin/main, "
+                       "resolve, commit, then team precheck again." % (" ".join(files.split()) or out[-400:]))
+        _, changed = git("diff", "--name-only", main, "HEAD", cwd=tree)
+        bad = [p for p in changed.splitlines() if not path_ok(p)]
+        if bad:
+            return 1, no + "These paths may not be changed:\n  " + "\n  ".join(bad)
+        if quick:
+            return 0, msg + ("\nPRECHECK (quick) PASSED: your HEAD merges cleanly into main and changes only "
+                             "allowed paths. The checks were not run.")
+        ok, report, passing = verify(tree)
+        if not ok:
+            return 1, no + "The check fails: " + report
+        lost = [s for s in landed() if s not in passing]
+        if lost:
+            return 1, no + "It would break statements that are already done: " + " ".join(lost)
+        return 0, (msg + "\nPRECHECK PASSED: the merge job would accept this. Nothing was landed: "
+                   "run team mr to land it.\n%s\ndone on main would be: %s" % (report, " ".join(passing) or "-"))
+    finally:
+        shutil.rmtree(tree, ignore_errors=True)
+
+
 # ----------------------------------------------------------------- messages
 def do_msg(agent, board, to, body):
     """Store one message. The sender is the spool the request came in by, never the request."""
@@ -472,7 +524,7 @@ def handle(agent, board, req):
     if op == "inbox":
         return do_inbox(board, bool(req.get("all")))
     left = time_left()
-    if left is not None and left <= 0 and op in ("sql", "push", "mr", "msg"):
+    if left is not None and left <= 0 and op in ("sql", "push", "mr", "msg", "precheck"):
         return 3, "TIME IS UP: the run has ended. Stop working.", op
     if op == "msg":
         return do_msg(agent, board, str(req.get("to", "")), str(req.get("body", "")))
@@ -487,6 +539,9 @@ def handle(agent, board, req):
         title = str(req.get("title", ""))
         code, out = do_mr(agent, title)
         return code, out, title
+    if op == "precheck":
+        code, out = do_precheck(agent, bool(req.get("quick")))
+        return code, out, op + (" quick" if req.get("quick") else "")
     return 2, "unknown op", op
 
 
