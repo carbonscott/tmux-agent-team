@@ -37,8 +37,17 @@ def tools_of(cfg, agent):
     return PROFILES[profile_of(cfg, agent)][0]
 
 
+def sandbox_on(cfg):
+    """config.json "sandbox": true (the default, also when absent) keeps every agent's shell in
+    Claude Code's sandbox; false runs the team unwalled (see mk_settings.py). Only exactly false
+    turns it off, so a bad value never opens the walls (problems() refuses it before setup)."""
+    return cfg.get("sandbox", True) is not False
+
+
 def problems(cfg):
     out = []
+    if type(cfg.get("sandbox", True)) is not bool:
+        out.append("sandbox must be true or false, not %s" % json.dumps(cfg.get("sandbox")))
     if cfg.get("profile", "sealed") not in PROFILES:
         out.append("profile %r is not one of: %s" % (cfg.get("profile"), ", ".join(PROFILES)))
     for a, p in (cfg.get("agent_profiles") or {}).items():

@@ -12,11 +12,18 @@ files and the other agents' workspaces, and in the home directory everything exc
   folder (history.jsonl, projects/, settings, credentials) is hidden.
 Only entries that exist when this runs can be named, so launch.sh runs it again before every
 launch. Add machine-specific extras in config.json: extra_private_paths.
+
+config.json "sandbox": false (an unwalled run) writes the same settings with the sandbox's
+"enabled" set to false: the hooks and the environment stay, and nothing hides files or the
+network from the shell any more. Only exactly false does that (profiles.sandbox_on).
 """
 import json
 import os
 import shutil
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import profiles  # noqa: E402
 
 R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 cfg = json.load(open(R + "/config.json"))
@@ -65,6 +72,7 @@ def private_paths():
     return out + list(cfg.get("extra_private_paths", []))
 
 
+WALLED = profiles.sandbox_on(cfg)
 os.makedirs(R + "/harness/settings", exist_ok=True)
 private = private_paths()
 for a in cfg["agents"]:
@@ -77,7 +85,7 @@ for a in cfg["agents"]:
             "Stop": [{"hooks": [{"type": "command", "command": hook + "keepgoing.py " + a, "timeout": 15}]}],
         },
         "sandbox": {
-            "enabled": True,
+            "enabled": WALLED,
             "autoAllowBashIfSandboxed": False,   # the auto-mode classifier still judges each command
             "allowUnsandboxedCommands": False,
             "filesystem": {
@@ -92,4 +100,10 @@ for a in cfg["agents"]:
                 "GIT_CONFIG_GLOBAL": "/dev/null"},
     }
     json.dump(s, open("%s/harness/settings/%s.json" % (R, a), "w"), indent=1)
-print("settings written for %s (%d private paths hidden)" % (" ".join(cfg["agents"]), len(private)))
+if WALLED:
+    print("settings written for %s (%d private paths hidden)" % (" ".join(cfg["agents"]), len(private)))
+else:
+    print("settings written for %s, with the sandbox off" % " ".join(cfg["agents"]))
+    print("WARNING: unwalled run: the sandbox is off for every agent (config.json \"sandbox\": false).\n"
+          "  The monitor still checks every tool call, but nothing else keeps an agent out of the harness,\n"
+          "  the board, main, the other workspaces or the network. See SKILL.md.")
