@@ -392,4 +392,17 @@ done
 check "L2 design.md: shown live, the hook and the sandbox apply inside subagents" 'Tool calls made inside a subagent.*Shown live' cat "$REPO/references/design.md"
 fi
 
+# ---- H: the team's decision record matches the run's records
+if want H; then
+D=$REPO/references/decisions/team-choice.md
+refute "H no longer claims the first 45 minutes, before four statements were done" 'In the first 45 minutes' sh -c "tr '\\n' ' ' < '$D'"
+check "H marks the correction as made after the run by review" 'Corrected after the run by review' cat "$D"
+check "H the run took 33.3 minutes, four statements done at minute 14.7" '33\.3 minutes.*minute 14\.7' sh -c "tr '\n' ' ' < '$D'"
+check "H 11 of 27 merge requests were rejected, all for conflicts" '27 merge requests, 16 were accepted and 11 rejected, every one of them for a merge conflict' sh -c "tr '\n' ' ' < '$D' | tr -s ' '"
+check "H per agent: w2 3, w1 2, w4 2, w5 2, w3 1, w6 1" 'w2 three times.*w1 twice.*w4 twice.*w5 twice.*w3 once.*w6 once' sh -c "tr '\n' ' ' < '$D'"
+check "H the cost was the wait in the merge queue: 714 s" 'cost was waiting.*714 s' sh -c "tr '\n' ' ' < '$D'"
+check "H the table lists all 11 rejections" '^11$' sh -c "grep -cE '^\| [0-9]+\.[0-9] \| [0-9]+\.[0-9] \| w[1-6] ' '$D'"
+check "H the decision is kept" 'team precheck' cat "$D"
+fi
+
 finish
