@@ -1,6 +1,28 @@
 <!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>tmux-agent-team proofs</title>
-<style>body{font:16px/1.5 system-ui,sans-serif;max-width:44rem;margin:3rem auto;padding:0 1rem;background:#f2f5f2;color:#1b2420}@media(prefers-color-scheme:dark){body{background:#131816;color:#e2e9e4}a{color:#aeb9ff}}</style>
-<h1>tmux-agent-team: proof pages</h1>
-<p>Each pull request links to a page here that shows the change working in a real run. Pages are being added.</p>
+<style>
+:root{--bg:#f2f5f2;--ink:#1b2420;--muted:#5a6860;--line:#b7c3ba;--link:#2a3ca8}
+@media(prefers-color-scheme:dark){:root{--bg:#131816;--ink:#e2e9e4;--muted:#93a299;--line:#39453e;--link:#aeb9ff}}
+body{font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;max-width:52rem;margin:0 auto;padding:3rem 1rem 4rem;background:var(--bg);color:var(--ink)}
+h1{font-size:1.8rem;line-height:1.2;margin:0 0 .6rem}p{max-width:65ch}a{color:var(--link)}
+.e{font:12px ui-monospace,Menlo,monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.t{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:34rem;margin-top:1.5rem;font-size:.95rem}
+th,td{text-align:left;vertical-align:top;padding:.55rem .8rem .55rem 0;border-bottom:1px solid var(--line)}
+th{font:12px ui-monospace,Menlo,monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-bottom:1.5px solid var(--ink)}
+</style>
+<div class="e">tmux-agent-team · 2026-11-25</div>
+<h1>Proof pages</h1>
+<p>A team of seven Claude Opus 5.5 agents, run with this template, built eight features on the template itself in 33 minutes. Each page below shows one of them working in a live run with real tmux and real Claude Code sessions: one unedited recording with chapters, expected against measured, an independent read-back, and the bugs the run found.</p>
+<div class="t"><table>
+<tr><th>Page</th><th>What the live run did</th><th>Branch</th></tr>
+<tr><td><a href="tests/">Tests and the gateway fix</a></td><td>The start-up race at 1,250 starts before and after; acceptance tests fail before and pass after; <a href="tests/dev-run-report.html">the build run's own report</a></td><td>dev-scaffold</td></tr>
+<tr><td><a href="archive/">Archive</a></td><td>A finished run sealed into one file, unpacked elsewhere, cloned and tested</td><td>feat/archive</td></tr>
+<tr><td><a href="profiles/">Profiles</a></td><td>Sixteen real sessions probing what each profile can and cannot do, then a mixed-profile team</td><td>feat/profiles</td></tr>
+<tr><td><a href="msg/">Messages</a></td><td>A team that messaged unprompted; eighteen forgery attempts refused</td><td>feat/msg</td></tr>
+<tr><td><a href="resume/">Resume</a></td><td>A team killed twice mid-run and resumed twice</td><td>feat/resume</td></tr>
+<tr><td><a href="report/">Report</a></td><td>The run page checked number by number against the records; <a href="report/example-run-report.html">an example</a></td><td>feat/report</td></tr>
+<tr><td><a href="goal/">Goal</a></td><td>A make-goal contract as the team's task, and a boss session under /goal</td><td>feat/goal</td></tr>
+<tr><td><a href="precheck/">Precheck</a></td><td>The team's own pick: the merge job's verdict without landing</td><td>feat/wildcard</td></tr>
+<tr><td><a href="stall/">Stall</a></td><td>A task built to get stuck, ended by the stall limit with 52 of 60 minutes unused</td><td>feat/stall</td></tr>
+</table></div>
 </html>
