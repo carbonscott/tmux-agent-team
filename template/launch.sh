@@ -4,12 +4,12 @@
 #   ./launch.sh --resume   continue an interrupted run: the same board, main and removals; the
 #                          deadline moves later by the time the run was down (harness/runstate.py)
 set -eu
-R=$(cd "$(dirname "$0")" && pwd); cfg() { python3 "$R/harness/cfg.py" "$1"; }
+R=$(cd "$(dirname "$0")" && pwd); cfg() { "$R/harness/py" "$R/harness/cfg.py" "$1"; }
 S=$(cfg session); MODE=${1:-}
 case "$MODE" in ""|--resume) ;; *) echo "usage: ./launch.sh [--resume]"; exit 2;; esac
 tmux has-session -t "=$S" 2>/dev/null && { echo "tmux session $S already exists"; exit 1; }
 [ -d "$R/ws" ] || { echo "run ./setup.sh first"; exit 1; }
-STATE=$(python3 "$R/harness/runstate.py")
+STATE=$("$R/harness/py" "$R/harness/runstate.py")
 if [ -z "$MODE" ]; then
   case "$STATE" in
     INTERRUPTED*) echo "This run was interrupted: it started, is not complete, and its tmux session is gone."
@@ -22,17 +22,17 @@ if [ -z "$MODE" ]; then
   rm -f "$R"/state/DONE "$R"/state/STALLED "$R"/state/HALT "$R"/state/stops.* "$R"/state/removed/* 2>/dev/null || true
   [ -e "$R/state/landed.json" ] || echo '[]' > "$R/state/landed.json"
 else
-  python3 "$R/harness/runstate.py" --resume
+  "$R/harness/py" "$R/harness/runstate.py" --resume
   rm -f "$R"/state/stops.* 2>/dev/null || true
 fi
 # the sandbox can hide only what exists, so name the home directory's entries again now
-python3 "$R/harness/mk_settings.py" >/dev/null
-tmux new-session -d -s "$S" -n gateway -c "$R" "python3 -u $R/harness/gateway.py; exec bash"
+"$R/harness/py" "$R/harness/mk_settings.py" >/dev/null
+tmux new-session -d -s "$S" -n gateway -c "$R" "$R/harness/py -u $R/harness/gateway.py; exec bash"
 tmux set-option -t "$S" remain-on-exit on
 tmux new-window -d -t "$S" -n board -c "$R" "bash $R/harness/board.sh; exec bash"
 if [ -z "$MODE" ]; then
   sleep 1
-  python3 -c "import time;open('$R/state/deadline','w').write(str(time.time()+$(cfg budget_min)*60))"
+  "$R/harness/py" -c "import time;open('$R/state/deadline','w').write(str(time.time()+$(cfg budget_min)*60))"
   date +%s > "$R/state/started"; cp "$R/state/started" "$R/state/stall_from"   # stall clock: see stall_min
 fi
 for a in $(cfg agents); do

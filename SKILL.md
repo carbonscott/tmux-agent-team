@@ -24,9 +24,11 @@ How the team works:
 
 ## Requirements
 
-Linux with `tmux`, `git`, `python3`, `bwrap` (bubblewrap) and `claude` (Claude Code, signed in, with auto mode). The team itself needs nothing else: no Docker and no database server.
+Linux with `tmux`, `git`, `uv`, `bwrap` (bubblewrap) and `claude` (Claude Code, signed in, with auto mode). The team itself needs nothing else: no Docker, no database server and no `python3`.
 
-Your task's check may need tools of its own. They are installed during setup, which is the only step that may use the network. The example task installs `pytest` with `uv` or `pip`.
+All Python goes through `uv`. `setup.sh` has `uv` put one interpreter in `tools/py`: a Python 3.10 or newer that it finds on the machine, or, when there is none, one it downloads into `tools/python` (set `UV_PYTHON_PREFERENCE=only-managed` to always use a downloaded one). The harness, the gateway, the monitor, `team` and the agents' `python3` all run on it. Run the harness's Python scripts with `harness/py`, as in `harness/py harness/verify.py`.
+
+Your task's check may need tools of its own. They are installed during setup, which is the only step that may use the network. The example task installs `pytest` with `uv`.
 
 ## Steps
 
@@ -68,8 +70,8 @@ Settings in `config.json`:
 
 **From a make-goal contract.** If the user has a contract from the make-goal skill (`.goal/<slug>.json`), let it write the task instead of filling the tables by hand. Only a `deterministic` contract works, and only before `./setup.sh`:
 
-    python3 harness/from-goal.py .goal/<slug>.json                          # prints the plan, writes nothing
-    python3 harness/from-goal.py .goal/<slug>.json --apply --allowed 'out/.*'   # writes config.json and task/seed/STATEMENTS.md
+    harness/py harness/from-goal.py .goal/<slug>.json                          # prints the plan, writes nothing
+    harness/py harness/from-goal.py .goal/<slug>.json --apply --allowed 'out/.*'   # writes config.json and task/seed/STATEMENTS.md
 
 Each `done_when` item that names a command in backticks becomes a statement, checked by that command (`task.checks`). Items without one (the contract's claims and ledger items) are listed under `skipped`: they stay yours. Read every warning: a check such as `wc -l` exits 0 whatever it prints, so the merge job would accept anything; rewrite it in `config.json`. Turn the contract's guardrails into `--allowed` patterns yourself. Text already in `STATEMENTS.md` is kept below the generated statements (`--replace-statements` drops it): keep what still describes the task. Then fill `task/seed/`, `task/install.sh` and `task/probe/` as the first table says; `references/goal.md` says what the probe must hold for such a task, and why `test_gateway.sh` reports it as merged-but-not-counted. To run yourself under `/goal` while the team works, and for an agent that runs `/goal` itself, read `references/goal.md` first.
 
@@ -118,7 +120,7 @@ explains. Not yet shown live. `references/design.md` says what is enforced.
 
     ./setup.sh
 
-This runs `task/install.sh`, creates the central repository from `task/seed/`, and makes one workspace and one settings file per agent.
+This sets up the work directory's Python (`tools/py`), runs `task/install.sh`, creates the central repository from `task/seed/`, and makes one workspace and one settings file per agent.
 
 ### 4. Test before launch
 
@@ -166,7 +168,7 @@ When the machine restarts or the tmux session dies, the run is not lost: the boa
     ./launch.sh --resume        # continue it
     ./teardown.sh --archive     # or put it away as one sealed file
 
-`--resume` first checks the work directory (every workspace, `central.git` with `main`, the clock files, `landed.json`, the board's integrity, and that no gateway still serves it: the gateway's lock on `config.json` must be free, or, where the lock cannot be tested, no gateway may have beaten in the last 10 s) and refuses if anything is wrong. It then moves the deadline later by the time the run was down (now minus the gateway's last heartbeat, `state/heartbeat`), records it in `records/resumes.jsonl`, and starts the gateway, the board and one window per agent. Each agent is a fresh session started from its rejoining brief (`python3 harness/render.py <agent> --resume`): it remembers nothing and finds its place on the board and in its workspace. The lead keeps its tables and orders and reopens the claims of helpers that do not come back. Earlier removals hold: a removed helper gets no window. Run `harness/boss.sh trust` again, then go on with step 6.
+`--resume` first checks the work directory (every workspace, `central.git` with `main`, the clock files, `landed.json`, the board's integrity, and that no gateway still serves it: the gateway's lock on `config.json` must be free, or, where the lock cannot be tested, no gateway may have beaten in the last 10 s) and refuses if anything is wrong. It then moves the deadline later by the time the run was down (now minus the gateway's last heartbeat, `state/heartbeat`), records it in `records/resumes.jsonl`, and starts the gateway, the board and one window per agent. Each agent is a fresh session started from its rejoining brief (`harness/py harness/render.py <agent> --resume`): it remembers nothing and finds its place on the board and in its workspace. The lead keeps its tables and orders and reopens the claims of helpers that do not come back. Earlier removals hold: a removed helper gets no window. Run `harness/boss.sh trust` again, then go on with step 6.
 
 - A run that was paused when it died resumes still paused. Review `state/HALT` as in step 6; `boss.sh resume` then gives back the pause and the time down together.
 - A run that had run out of time or stalled before it died is not interrupted: `boss.sh status` says `ended`, and `--resume` refuses. Archive it.
@@ -174,11 +176,11 @@ When the machine restarts or the tmux session dies, the run is not lost: the boa
 
 ### 7. Finish
 
-1. **Check the result yourself:** `python3 harness/verify.py`. It clones `main` into a fresh directory, runs the check for every statement, and confirms the frozen files are unchanged. Every line must say PASS. Once the run is complete `main` is closed (the gateway refuses `team mr`), so what you check is what you hand back.
-2. **Review the records:** `python3 harness/offline_monitor.py`. It lists every blocked or refused action, every failed board request and every rejected merge. Failed reads of `announce` at the very start are helpers arriving before the lead; they are harmless. `harness/boss.sh messages` prints what the agents said to each other with `team msg`; read it for pressure, coaching or work done outside the board.
-3. **Write the run's page:** `python3 harness/report.py`. It writes one self-contained HTML page, `report.html` in the work directory (`-o FILE` for another place), and prints `report: <full path>` as its last line. The page shows how much is done, the running time (pauses and time down do not count), a timeline of the run to scale, every accepted and rejected merge, each agent's numbers and profile, and every pause, removal, resume, stall and message count. It also works during a run, as a fuller view than `boss.sh status`. Step 5 keeps the final page in the archive.
+1. **Check the result yourself:** `harness/py harness/verify.py`. It clones `main` into a fresh directory, runs the check for every statement, and confirms the frozen files are unchanged. Every line must say PASS. Once the run is complete `main` is closed (the gateway refuses `team mr`), so what you check is what you hand back.
+2. **Review the records:** `harness/py harness/offline_monitor.py`. It lists every blocked or refused action, every failed board request and every rejected merge. Failed reads of `announce` at the very start are helpers arriving before the lead; they are harmless. `harness/boss.sh messages` prints what the agents said to each other with `team msg`; read it for pressure, coaching or work done outside the board.
+3. **Write the run's page:** `harness/py harness/report.py`. It writes one self-contained HTML page, `report.html` in the work directory (`-o FILE` for another place), and prints `report: <full path>` as its last line. The page shows how much is done, the running time (pauses and time down do not count), a timeline of the run to scale, every accepted and rejected merge, each agent's numbers and profile, and every pause, removal, resume, stall and message count. It also works during a run, as a fuller view than `boss.sh status`. Step 5 keeps the final page in the archive.
 4. **Hand back the result.** It is the `main` branch of `<work dir>/central.git`.
-5. **Stop the team and put the run away:** `./teardown.sh --archive [DIR]`. It stops everything, runs `verify.py` once more, writes one sealed file `team-archive-<session>-<YYYYmmdd>-<HHMMSS>.tar.gz` into DIR (default: the folder that holds the work directory), deletes the run's files from the work directory, and prints `archived: <full path>` as its last line. The file holds only `central.git` (the result: `git clone central.git <dir>`), `records/` (with `run.json`, the run's facts, and `report.html`, its page; `python3 harness/report.py --records <unpacked>/records` rebuilds the page) and `STATUS.txt`, whose first line says what the run came to, for example `abandoned run, stopped 2026-11-25 14:41:07 UTC, 4 of 7 done, not verified`. It deletes nothing unless the file was written and read back. Its output says "nothing from this run is still running" once every agent session has exited. Agents stop by themselves within a minute or two of the finish, so there is no need to wait for them first.
+5. **Stop the team and put the run away:** `./teardown.sh --archive [DIR]`. It stops everything, runs `verify.py` once more, writes one sealed file `team-archive-<session>-<YYYYmmdd>-<HHMMSS>.tar.gz` into DIR (default: the folder that holds the work directory), deletes the run's files from the work directory, and prints `archived: <full path>` as its last line. The file holds only `central.git` (the result: `git clone central.git <dir>`), `records/` (with `run.json`, the run's facts, and `report.html`, its page; `harness/py harness/report.py --records <unpacked>/records` rebuilds the page) and `STATUS.txt`, whose first line says what the run came to, for example `abandoned run, stopped 2026-11-25 14:41:07 UTC, 4 of 7 done, not verified`. It deletes nothing unless the file was written and read back. Its output says "nothing from this run is still running" once every agent session has exited. Agents stop by themselves within a minute or two of the finish, so there is no need to wait for them first.
 6. **Report to the user:** whether every statement is done and how you checked, each pause and what you decided, each prompt you answered for them, and anything still running. Give them the path of the page from step 3.
 
 **Archive or purge.** Archive by default, and always when any work is unverified or the run did not finish: the archive keeps the work and the audit, and nothing else. A run's files left in the work directory hold a stale board that a later session can mistake for live state, so do not leave them lying around either. Purge (`./teardown.sh --purge`) only a run with nothing worth keeping, such as a trial launch, or once its result has been handed back and checked elsewhere: it deletes the repository and the records for good. A plain `./teardown.sh` stops the run and keeps every file, for when you mean to look before deciding.
@@ -193,12 +195,12 @@ When the machine restarts or the tmux session dies, the run is not lost: the boa
 | `./launch.sh --resume` | Continues an interrupted run: same board and `main`, time down given back |
 | `harness/wait-run.sh [seconds]` | Blocks until the run completes, stalls, pauses, or times out |
 | `harness/boss.sh status / trust / say <id or all> "<text>" / slash <id> "/<command>" / messages / resume / unstall / remove <id> / end` | The boss's controls. `messages` prints every message the agents sent each other; `slash` types a slash command into an `open` agent's window; `unstall` reopens a stalled run. |
-| `python3 harness/verify.py` | Checks every statement on a fresh checkout of `main` |
-| `python3 harness/from-goal.py <contract> [--apply --allowed <regex> ...]` | Turns a make-goal contract into the task, before `setup.sh` |
-| `python3 harness/offline_monitor.py` | Summary of the run's records |
-| `python3 harness/report.py [-o FILE]`, `--records DIR` | One HTML page showing what the run did; works before, during and after a run, and on an unpacked archive's `records/` |
+| `harness/py harness/verify.py` | Checks every statement on a fresh checkout of `main` |
+| `harness/py harness/from-goal.py <contract> [--apply --allowed <regex> ...]` | Turns a make-goal contract into the task, before `setup.sh` |
+| `harness/py harness/offline_monitor.py` | Summary of the run's records |
+| `harness/py harness/report.py [-o FILE]`, `--records DIR` | One HTML page showing what the run did; works before, during and after a run, and on an unpacked archive's `records/` |
 | `./teardown.sh [--archive [DIR] \| --purge]` | Stops the session and the gateway; `--archive` seals the repository and records into one dated file in DIR and then deletes the run's files; `--purge` deletes them without keeping anything |
-| `python3 harness/profiles.py [--list / --check / <agent>]` | Each agent's profile; `--check` validates `config.json` |
+| `harness/py harness/profiles.py [--list / --check / <agent>]` | Each agent's profile; `--check` validates `config.json` |
 | `team help` | What agents can do: `whoami`, `status`, `sql`, `push`, `precheck`, `mr`, `wait`, `msg`, `inbox` |
 | `team precheck [--quick]` | For agents: the merge job's verdict on their HEAD merged with the current `main`, without landing it. `--quick` stops after the merge and the path rule. |
 

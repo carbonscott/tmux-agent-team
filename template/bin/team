@@ -1,4 +1,9 @@
-#!/usr/bin/python3
+#!/bin/sh
+''':'
+exec "$(dirname "$0")/../tools/py/bin/python" "$0" "$@"
+'''
+# The three lines above start this file with the work directory's own Python (set up by uv in
+# setup.sh): to a shell they are a no-op and an exec, to Python a string.
 """team: the only door out of an agent sandbox.
 
 Requests are dropped in this workspace's spool (.gw/req) and relayed by the

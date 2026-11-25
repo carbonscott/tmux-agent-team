@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """Stand-in for bwrap, used by tests/lib.sh only where a real sandbox cannot be nested (for
 example inside an agent's own sandbox). It runs the toy check in the merged tree with no
 isolation at all. The merge job of a real run never uses it."""

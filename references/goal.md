@@ -16,8 +16,8 @@ Neither way starts a new tmux session or a new Claude Code session from inside t
 
 ### 1. Turn the contract into the team's task
 
-    python3 harness/from-goal.py .goal/<slug>.json            # prints the plan; writes nothing
-    python3 harness/from-goal.py .goal/<slug>.json --apply --allowed '<regex>' [...]
+    harness/py harness/from-goal.py .goal/<slug>.json            # prints the plan; writes nothing
+    harness/py harness/from-goal.py .goal/<slug>.json --apply --allowed '<regex>' [...]
 
 The plan is JSON: `statements` (each with `name`, `check`, `text`), `skipped`, and the
 contract's `goal` and `guardrails`.
@@ -86,7 +86,7 @@ result (`checked: alpha ok; beta FAILED (...)`), so an agent sees what still fai
 
 ### 2. The boss's own condition
 
-The proof of the whole contract is the output of `python3 harness/verify.py`: it clones
+The proof of the whole contract is the output of `harness/py harness/verify.py`: it clones
 `main` fresh, runs every statement's own check in the merge job's sandbox, and confirms the
 frozen files are unchanged. The `/goal` evaluator reads conversation text only, so the
 boss must print that output. Under each statement that has its own check, `verify.py`
@@ -94,7 +94,7 @@ prints `check: <command>`, so the evaluator sees the item's command, its last ou
 and `PASS` together. A condition that fits:
 
 > Every statement passes on a fresh checkout of main, proven by printing the output of
-> `python3 harness/verify.py`, whose last line reads `<m> of <m> statements pass`.
+> `harness/py harness/verify.py`, whose last line reads `<m> of <m> statements pass`.
 
 Do not prove an item by running its command in a workspace: only `main` counts. Each turn
 of the loop is one round of `SKILL.md` step 6 (`wait-run.sh`, then act on what it printed).

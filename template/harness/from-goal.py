@@ -1,8 +1,8 @@
 """Turn a make-goal contract (.goal/<slug>.json) into the team's task.
 
-  python3 harness/from-goal.py <contract.json>
+  harness/py harness/from-goal.py <contract.json>
       print the plan as JSON and write nothing
-  python3 harness/from-goal.py <contract.json> --apply --allowed <regex> [<regex> ...] [--replace-statements]
+  harness/py harness/from-goal.py <contract.json> --apply --allowed <regex> [<regex> ...] [--replace-statements]
       write the plan into config.json and task/seed/STATEMENTS.md (only before setup.sh). Text that
       was in STATEMENTS.md before is kept below the generated statements, under "## Earlier text of
       this file", unless --replace-statements is given.

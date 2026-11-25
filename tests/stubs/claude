@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """Stub claude for the tests: starts no session. It appends its arguments, as one JSON
 list per call, to $STUB_DIR/claude.calls.jsonl, and writes the last call to
 $STUB_DIR/claude.argv.json."""

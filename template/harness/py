@@ -1,0 +1,8 @@
+#!/bin/sh
+# Runs Python for the harness. Every Python call in this template goes through uv:
+# after setup.sh, the interpreter uv put in tools/py; before it (or after --purge), one that
+# uv finds or fetches. Nothing here needs a python3 on the machine.   usage: harness/py <args as for python>
+R=$(cd "$(dirname "$0")/.." && pwd)
+[ -x "$R/tools/py/bin/python" ] && exec "$R/tools/py/bin/python" "$@"
+command -v uv >/dev/null || { echo "missing: uv (https://docs.astral.sh/uv/)" >&2; exit 127; }
+exec uv run --quiet --no-project --python '>=3.10' python "$@"

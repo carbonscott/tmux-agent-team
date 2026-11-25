@@ -68,7 +68,7 @@ fi
 # ---- selftest.sh, driven by a fake claude that sends each numbered step through the real monitor
 # (A3: a second session shows ~/.claude's history is hidden; J: step 14; M: the tested agent's profile)
 fake_claude() { mkdir -p "$TOP/fake"; cat > "$TOP/fake/claude" <<'PY'
-#!/usr/bin/python3
+#!/usr/bin/env python3
 import json, os, re, subprocess, sys
 a = sys.argv[1:]; prompt = a[a.index("--") + 1] if "--" in a else ""
 ws = os.getcwd(); R = os.path.dirname(os.path.dirname(ws)); agent = os.path.basename(ws)
