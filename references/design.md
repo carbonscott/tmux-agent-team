@@ -61,6 +61,7 @@ work directory, where the agents' sandbox and the merge job's sandbox can both r
 | Writes outside the workspace, reading other workspaces or the harness, network access, reaching tmux | Enforced for shell commands by the sandbox (tested from inside an agent session) |
 | No network for the shell, in every profile | Enforced twice. The sandbox allows no domain. The monitor pauses the team on a Bash call that asks for network with `allowed_domains` (Claude Code 2.1.331 honoured that parameter: the shell fetched a page in all four profiles) or carries any parameter but `command`, `description`, `timeout` and `run_in_background`. The monitor rule is tested with stubs and by `selftest.sh` (its last step); not yet seen in a live session. |
 | Reading the owner's files in the home directory (`~/.claude/history.jsonl`, `~/.claude/projects/`, credentials, any dot-folder) | Enforced for shell commands by the sandbox: every entry of `~/.claude` but `shell-snapshots/` and every dot-entry of `~` but the shell's own files, user-installed programs under `.local` and the uv and pip caches are hidden (`mk_settings.py`, run again at every launch). `~/.gitconfig` is hidden too, so the agents' environment sets `GIT_CONFIG_GLOBAL=/dev/null`. The monitor also pauses the team on the bare words `.claude` and `.ssh`, which a quoted or built path can get past. |
+| The three rows above, in an unwalled run (`"sandbox": false`) | Requested for that run, not enforced: the sandbox is off, so only the monitor's fixed rules stand between the shell and those places, and they judge the command text. See "An unwalled run" below for every guarantee that changes. |
 | Board permissions, statement time limit, atomic claims, one transaction per request | Enforced by the gateway (tested) |
 | Every request answered | A request file the gateway cannot serve (over 1 MiB, not JSON, a link) is answered with an error and logged, never dropped (tested with stubs) |
 | Only checked work reaches `main`; frozen paths; no direct pushes | Enforced by the merge job (tested) |
@@ -103,6 +104,43 @@ stub-based tests.
 
 A task written from a goal contract, a boss running under `/goal`, and an agent running
 `/goal` inside the team have not been exercised either.
+
+## An unwalled run (`"sandbox": false`)
+
+`"sandbox": false` in `config.json` writes every agent's settings with the shell sandbox's
+`enabled` set to `false`. It exists for teams whose shell must reach other machines (SSH, the
+`bridge` CLI to an HPC facility): the sandbox forbids that, and opening only Unix sockets
+(`allowAllUnixSockets`) also opened the boss's tmux server to a one-line script, which is
+worse. It is a choice per run, made by the owner, on the view that agents are not
+adversaries and the walls mostly guard against mistakes.
+
+What stays exactly as in a walled run: the monitor hook on every tool call (same rules, same
+records, same pause), the keep-going and permission-denied hooks, the profiles' tool lists,
+the gateway (identity by spool, board permissions, limits) and the merge job, whose check
+still runs in its own no-network `bwrap` sandbox. `GIT_CONFIG_GLOBAL=/dev/null` stays too.
+
+What becomes a request in an unwalled run, because rule 5 (walls) is gone and rules 1 to 4
+and 9 leaned on it:
+
+| Guarantee | Walled run | Unwalled run |
+|---|---|---|
+| An agent writes only in its own workspace | Enforced (sandbox) | Requested. The monitor pauses on a command that names the harness, another workspace, `.claude`, `.ssh` or `board.db`; a script written with Write and then run is not looked into. |
+| Agents cannot read the harness, records, state, task, other workspaces or the owner's home | Enforced (sandbox) | Requested, same monitor rules. Every other file the OS user can read is readable. |
+| The shell has no network | Enforced twice | Requested. The monitor still pauses on `curl`, `wget`, `ssh` and the like, and on `allowed_domains` (meaningless with the sandbox off); any program can still open a connection. |
+| tmux is out of reach | Enforced (sandbox) | Requested. The `tmux` rule sees the word; a script can reach the socket under `/tmp/tmux-<uid>/`. |
+| One door: the board only through `team` | Enforced | Requested. An agent can open `state/board.db` directly, bypassing permissions and identity. |
+| Identity comes from the channel | Enforced | Requested. An agent can write into another agent's spool and speak as it. |
+| Only the merge job moves `main` | Enforced | Requested. The pre-receive hook refuses pushes, but `central.git` can be written directly. The merge job's checks can be edited. |
+| A pause holds | Enforced | Requested. `state/HALT` can be deleted. |
+| Records out of reach | Enforced | Requested. `records/` can be rewritten. |
+
+An unwalled run says so wherever the boss looks: `setup.sh` and `launch.sh` print a warning,
+`boss.sh status` and `offline_monitor.py` print a line, the run's page and the archive's
+`STATUS.txt` name it, and `records/run.json` keeps `"sandbox": false`. `selftest.sh` skips its
+wall steps (with the sandbox off they would reach the boss's tmux and the owner's prompt
+history) and tests only the monitor. A resumed run reads `config.json` again, so it stays
+unwalled; changing the flag between crash and resume changes the run, and `launch.sh` warns
+again. Shown only by stub-based tests; no real unwalled run has been made.
 
 ## Resuming after a crash
 

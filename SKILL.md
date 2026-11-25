@@ -65,6 +65,7 @@ Settings in `config.json`:
 | `task.attempted_if` | Optional path, with `{name}`. A statement is checked once this path exists, and from then on it must pass or the merge is rejected. Without this setting every statement is checked on every merge, and a merge is rejected only if it breaks a statement that was already done. |
 | `task.allowed_paths` | Regular expressions. A merge may change only paths that match one of them. Everything else is frozen. |
 | `task.toolchain_paths` | Extra directories the check must be able to read, beyond `/usr` and `tools/` |
+| `sandbox` | `true` (the default, also when absent) runs every agent's shell in Claude Code's sandbox. `false` turns it off for the whole run: see "Unwalled runs" below. Any other value makes `setup.sh` fail. |
 | `extra_private_paths` | More paths to hide from the agents |
 | `extra_readable_home_paths` | Paths under the home directory's dot-folders to leave readable, beyond the short built-in list (for example `.cargo/bin`). Everything else there is hidden. |
 
@@ -115,6 +116,24 @@ same way. `harness/boss.sh status` lists each agent as `<agent>=<profile>`. An a
 start `/goal` itself (Claude Code treats it as a command typed by a person); put an `open` agent
 under `/goal` with `harness/boss.sh slash <id> "/goal <condition>"`, which `references/goal.md`
 explains. Not yet shown live. `references/design.md` says what is enforced.
+
+#### Unwalled runs (`"sandbox": false`)
+
+Use `"sandbox": false` only when the user asks for it, for work that must reach other machines
+(SSH, the `bridge` CLI). Tell the user what it gives up before you set it. With the sandbox off:
+
+- The monitor, the gateway, the merge job and the profiles work as before, and the merge job's
+  check still runs in its own sandbox.
+- Nothing but the monitor's rules keeps an agent away from the harness, the board file,
+  `main`, the other workspaces, the pause flag, the records, the owner's home directory and the
+  network. Those rules read the command text; a script the agent writes and then runs is not
+  looked into. Every "Enforced by the sandbox" row in `references/design.md` becomes
+  "Requested" for this run; its section "An unwalled run" lists them.
+
+`setup.sh` and `launch.sh` print a warning, `boss.sh status` prints an `unwalled` line, and the
+run's page and the archive's `STATUS.txt` say `unwalled`. `selftest.sh` skips its wall steps
+(3 to 7 and 13) and tests only the monitor. A resumed run reads `config.json` again: do not
+change the flag before `--resume`.
 
 ### 3. Set up
 

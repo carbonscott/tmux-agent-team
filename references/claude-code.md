@@ -41,6 +41,13 @@ Check flags and settings against your own version.
   `allowed_domains`, and on any Bash parameter but `command`, `description`, `timeout` and
   `run_in_background` (the only ones the proof runs' 1,866 recorded calls carried, besides
   `allowed_domains`). The last step of `selftest.sh` shows it before launch.
+- **`"sandbox": false` writes `"enabled": false` and keeps the rest.** In an unwalled run the
+  settings keep the `denyRead` list, the empty `allowedDomains` and both flags below; with
+  `enabled` false Claude Code applies none of them, so the shell runs as the OS user with the
+  network. The hooks and `env` are unchanged: hooks never ran inside the sandbox, and
+  `GIT_CONFIG_GLOBAL=/dev/null` keeps every agent's Git on its own workspace config. In the
+  owner's trials, the `bridge` CLI worked at once with the sandbox off; with it on, it failed
+  on the Unix socket. Not yet run as a whole team.
 - **`autoAllowBashIfSandboxed` is false**, so that sandboxed commands are not approved
   automatically and the agents' commands go through auto mode.
 - **Stop hooks have a cap** on consecutive blocks, according to the documentation. The
