@@ -1,9 +1,10 @@
 #!/bin/bash
-# Runs one agent's Claude Code session inside its tmux window. usage: run-agent.sh <id>
+# Runs one agent's Claude Code session inside its tmux window. usage: run-agent.sh <id> [--resume]
+# With --resume the agent starts, as a fresh session, from the brief for rejoining a run.
 R=$(cd "$(dirname "$0")/.." && pwd); A=$1
 cd "$R/ws/$A" || exit 1
 export PATH=$R/bin:$R/tools/bin:$PATH CLAUDE_CODE_STOP_HOOK_BLOCK_CAP=100000
-PROMPT="$(python3 "$R/harness/render.py" "$A")"
+PROMPT="$(python3 "$R/harness/render.py" "$A" ${2:+"$2"})"
 RC=(); [ -n "${TEAM_REMOTE_CONTROL:-}" ] && RC=(--remote-control "team-$A")
 # config.json: "model" (empty means Claude Code's default) and "effort" (default medium)
 MODEL=$(python3 -c "import json;print(json.load(open('$R/config.json')).get('model') or '')")

@@ -126,6 +126,19 @@ Agents can send each other messages: `team msg <agent|all> "<text>"` stores one 
 
 Paused agents do not restart by themselves; the `say` step is required. Do not coach the team: your messages carry facts about the run (time, a pause cleared, a removal), never hints about the work.
 
+### If the run was interrupted
+
+When the machine restarts or the tmux session dies, the run is not lost: the board, `main`, the workspaces and the clock live on disk. `harness/boss.sh status` prints a line starting `INTERRUPTED` for a run that started, is not complete and has no session. A plain `./launch.sh` then refuses and starts nothing. Choose one:
+
+    ./launch.sh --resume        # continue it
+    ./teardown.sh --archive     # or put it away as one sealed file
+
+`--resume` first checks the work directory (every workspace, `central.git` with `main`, the clock files, `landed.json`, the board's integrity, and that no gateway beat in the last 10 s) and refuses if anything is wrong. It then moves the deadline later by the time the run was down (now minus the gateway's last heartbeat, `state/heartbeat`), records it in `records/resumes.jsonl`, and starts the gateway, the board and one window per agent. Each agent is a fresh session started from its rejoining brief (`python3 harness/render.py <agent> --resume`): it remembers nothing and finds its place on the board and in its workspace. The lead keeps its tables and orders and reopens the claims of helpers that do not come back. Earlier removals hold: a removed helper gets no window. Run `harness/boss.sh trust` again, then go on with step 6.
+
+- A run that was paused when it died resumes still paused. Review `state/HALT` as in step 6; `boss.sh resume` then gives back the pause and the time down together.
+- A run that had run out of time or stalled before it died is not interrupted: `boss.sh status` says `ended`, and `--resume` refuses. Archive it.
+- `launch.sh --resume` continues a run after a crash; `boss.sh resume` clears a pause in a live run. They are different commands.
+
 ### 7. Finish
 
 1. **Check the result yourself:** `python3 harness/verify.py`. It clones `main` into a fresh directory, runs the check for every statement, and confirms the frozen files are unchanged. Every line must say PASS.
@@ -143,6 +156,7 @@ Paused agents do not restart by themselves; the `say` step is required. Do not c
 | `./setup.sh` | One-time setup |
 | `harness/test_gateway.sh`, `harness/selftest.sh` | Pre-launch tests; both reset what they touch |
 | `./launch.sh` | Starts the tmux session and the run clock |
+| `./launch.sh --resume` | Continues an interrupted run: same board and `main`, time down given back |
 | `harness/wait-run.sh [seconds]` | Blocks until the run completes, pauses, or times out |
 | `harness/boss.sh status / trust / say <id or all> "<text>" / messages / resume / remove <id> / end` | The boss's controls. `messages` prints every message the agents sent each other. |
 | `python3 harness/verify.py` | Checks every statement on a fresh checkout of `main` |

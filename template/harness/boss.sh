@@ -12,9 +12,10 @@ say() { tmux send-keys -t "=$S:$1" -l "[boss] $2"; sleep 0.5; tmux send-keys -t 
 case "${1:-status}" in
   status) python3 "$R/harness/board.py" --brief
           echo "profiles: $(python3 "$R/harness/profiles.py" --list)"
+          st=$(python3 "$R/harness/runstate.py"); case "$st" in INTERRUPTED*|ended*) echo "== $st";; esac
           [ -e "$R/state/HALT" ] && { echo "blocked action:"; python3 -m json.tool "$R/state/HALT"; };;
   trust)  # waits up to 20 s for the prompts to appear, so it can be run right after launch
-          todo=" $(cfg agents) "
+          todo=" $(cfg agents) "; for a in $todo; do [ -e "$R/state/removed/$a" ] && todo=${todo/ $a / }; done
           for i in $(seq 20); do
             for a in $todo; do
               pane=$(tmux capture-pane -p -t "=$S:$a" 2>/dev/null)

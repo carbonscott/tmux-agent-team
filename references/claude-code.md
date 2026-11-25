@@ -13,6 +13,7 @@ Check flags and settings against your own version.
 | Merge job | Scratch worktree, path allowlist, the task's check inside bubblewrap with no network | `harness/gateway.py` (`do_mr`, `run_check`) |
 | Monitor | `PreToolUse` hook with fixed rules; auto mode's classifier, whose denials reach a `PermissionDenied` hook; both write the pause flag | `harness/hook.py`, `harness/denied.py` |
 | Keep going | `Stop` hook; a timer types a reminder into the lead's window | `harness/keepgoing.py`, `harness/remind.sh` |
+| Rejoining after a crash | `launch.sh --resume` starts every agent as a new session (`run-agent.sh <id> --resume`) with the rejoining brief from `render.py --resume`; `claude --continue` is not used | `launch.sh`, `harness/runstate.py`, `docs/*-rejoin.md` |
 | Records | Hook and gateway logs in `records/`, which the sandbox hides | `harness/offline_monitor.py` |
 
 ## Quirks
