@@ -6,7 +6,7 @@ Check flags and settings against your own version.
 | Part | Implementation | File |
 |---|---|---|
 | Separate sessions | One `claude` process per tmux window, started with the brief as its first message | `harness/run-agent.sh`, `launch.sh` |
-| Profiles | `--tools` gets the profile's list; `sealed`, `research` and `allied` add `--disable-slash-commands`, `open` leaves it out and adds `Skill`. `--strict-mcp-config` with no server keeps connectors off in every profile. The default, `sealed`, is `--tools Bash,Edit,Read,Write,Glob,Grep`: no web access, subagents, Claude Code's own cross-session messaging or connectors. Messages between agents go through the gateway instead (`team msg`) | `harness/profiles.py`, `harness/run-agent.sh` |
+| Profiles | `--tools` gets the profile's list; `sealed`, `research` and `allied` add `--disable-slash-commands`, `open` leaves it out and adds `Skill`. `--strict-mcp-config` with no server keeps connectors off in every profile (a plugin's tools may still be offered; the monitor refuses them). The default, `sealed`, is `--tools Bash,Edit,Read,Write,Glob,Grep`: no web access, subagents, Claude Code's own cross-session messaging or connectors. Messages between agents go through the gateway instead (`team msg`) | `harness/profiles.py`, `harness/run-agent.sh` |
 | Walls | The shell sandbox, per agent: `denyRead` on the harness, records, state, task files, other workspaces and the rest of the home directory (every entry of `~/.claude` but `shell-snapshots/`, every dot-entry of `~` but a short list); no network domains, and the monitor refuses a Bash call that asks for some (`allowed_domains`) | `harness/mk_settings.py`, `harness/hook.py` |
 | Door | `team` writes a request file into `.gw/req` in the workspace and waits for the reply in `.gw/resp` | `bin/team` |
 | Board | One SQLite file in `state/`, opened only by the gateway. `me()` is a SQL function the gateway binds per agent; an authorizer limits what helpers may run, and refuses every write to the gateway's own tables (`messages`, `message_reads`) | `harness/gateway.py` (`Board`) |
@@ -69,14 +69,20 @@ Check flags and settings against your own version.
 - **`/goal`'s evaluator reads conversation text only.** It cannot run the check itself, so
   `verify.py` prints a statement's own check command under its `PASS` or `FAIL` line: one
   printed block then shows the command, its last output line and the verdict.
-- **`WebFetch` may be missing from a session.** On Claude Code 2.1.331 a session started with
-  `--tools Bash,WebSearch,WebFetch,Agent,Skill` reported Agent, Bash, Skill and WebSearch,
-  and no WebFetch; pages were fetched by a `web-fetch` subagent, which needs `Agent`. The
-  profiles keep `WebFetch` (the name is valid and harmless where absent), so on such a build
-  only `allied` and `open` can fetch pages.
-- **Subagent tool calls and the hook.** It is not known whether `PreToolUse` fires for calls
-  made inside a subagent. `hook.py` records a call that carries `agent_id` or `agent_type`
-  with a `subagent` field, so the first real `allied` run will show it either way.
+- **`WebFetch` goes where `Agent` is.** Measured on 2.1.331 and 2.1.332: a `research` session
+  (`--tools ...,WebSearch,WebFetch`) has the `WebFetch` tool and fetches pages itself. Where
+  `Agent` is in the list too (`allied`, `open`), the session reports no `WebFetch`, and Claude
+  Code fetches pages through a `web-fetch` subagent instead. The profiles keep `WebFetch` in
+  every list (the name is valid and harmless where it is dropped).
+- **Subagent tool calls and the hook.** Shown live: `PreToolUse` fires for calls made inside a
+  subagent, and the shell sandbox applies to them. A subagent's `head -1 harness/gateway.py`
+  and its `Write` outside the workspace were blocked, the pause (`state/HALT`) named the parent
+  agent, and `hook.py` recorded each such call with a `subagent` field (`agent_type`, such as
+  `general-purpose` or `web-fetch`).
+- **`--tools` and `--strict-mcp-config` are not the whole list.** Live interactive sessions were
+  also offered `EndConversation` and `mcp__easel__chart` (a tool a plugin registers) in every
+  profile. The monitor refuses both, without a pause, as it refuses every tool a profile does
+  not grant.
 - **Tool names the monitor knows:** `WebSearch` (input `query`), `WebFetch` (`url`, `prompt`),
   `Agent` (`prompt`, `description`, `subagent_type`, `run_in_background`), `Skill` (`skill`, `args`),
   `SubagentHandback` (`message`).

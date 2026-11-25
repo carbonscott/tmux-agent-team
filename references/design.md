@@ -72,12 +72,15 @@ orders are, which keeps the briefs short and shows that the board carries everyt
 | `WebFetch` only to public `http(s)` hosts | Enforced by fixed rules in `hook.py` (scheme, user names in URLs, loopback, link-local, private and other non-global addresses in any spelling, local-only names, and names that resolve to such an address within 2 s). A name that does not resolve in time is passed, and a name whose address changes between the check and the fetch is not caught. Tested with stubs only. |
 | Pages read by `research`, `allied` and `open` agents | Not checked. A page can carry instructions; the monitor judges the agent's next action, not what it read. |
 | A subagent's report to its agent (`SubagentHandback`) | Passed by the monitor where the profile grants `Agent`, from inside a subagent only, and recorded. Tested with stubs; not yet shown live (before the fix every report was refused). |
-| Tool calls made inside a subagent (`allied`, `open`) | Unproven. If the `PreToolUse` hook fires for them, they are checked like any other call and recorded with a `subagent` field (`offline_monitor.py` counts them). If it does not, a subagent's calls are limited only by the session's tools and the shell sandbox. |
+| Tool calls made inside a subagent (`allied`, `open`) | Shown live (the profiles proof run, Claude Code 2.1.331 and 2.1.332): the `PreToolUse` hook fires for them and the shell sandbox applies to them. A subagent's `head -1 harness/gateway.py` and its `Write` outside the workspace were blocked and paused the team, the pause named the parent agent, and the records tag each such call with a `subagent` field (19 recorded; `offline_monitor.py` counts them). |
 | Skills and slash commands (`open`) | Each skill call passes the monitor and is recorded; the team skill itself is refused. What a skill then asks for goes through the monitor call by call. `/loop` and `/goal` are a second loop beside the Stop hook: they can keep an agent busy, never let it past a pause, a removal or the merge job. |
-| Connectors (MCP servers) | Off in every profile (`--strict-mcp-config`, no server given). A connector acts outside the shell sandbox with its own credentials, and the monitor cannot judge what it does. |
+| Connectors (MCP servers) | Off in every profile (`--strict-mcp-config`, no server given). A connector acts outside the shell sandbox with its own credentials, and the monitor cannot judge what it does. Live sessions were still offered `EndConversation` and a plugin's tool (`mcp__easel__chart`) in every profile; the monitor refuses both, as it refuses every tool a profile does not grant. |
 
-Not yet exercised in any run: any profile other than `sealed` (only stub-based tests have
-started one), WebFetch through a `web-fetch` subagent, splitting a task, moving a helper between crews, the
+Exercised since: every profile, in the profiles proof run (one probe session per profile, and
+one live team of the example task with a `sealed` lead and `research`, `allied` and `open`
+helpers, 7 of 7 done), including pages fetched through a `web-fetch` subagent (whose report
+the monitor then refused; fixed since, not yet re-shown). Not yet exercised in any run: an
+`open` agent under `/goal`, splitting a task, moving a helper between crews, the
 five-minute reminder, a slow check, a helper dying mid-task, a stalled run, teams larger than four,
 resuming a run after a real crash (`launch.sh --resume` has run only against stub tmux and
 claude), and archiving a real run (`teardown.sh --archive`). The run report (`report.py`) has been
@@ -130,7 +133,7 @@ refuses whatever the profile does not grant. The profiles are a fixed list of fo
 `harness/profiles.py`; a custom profile in `config.json` was left out so that each
 combination the monitor sees has been thought through. Add one there if you need it.
 
-What still holds in `open`: the monitor sees every tool call the main session makes, a pause
+What still holds in `open`: the monitor sees every tool call the session and its subagents make, a pause
 refuses them all (skills included), `tmux` and `claude` are blocked in the shell, and only
 the merge job moves `main`. What does not: the agent sees the owner's installed skills, a
 skill brings its own instructions into the session, and `/loop` or `/goal` can keep an

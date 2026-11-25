@@ -98,16 +98,17 @@ tool the profile does not grant. Choose the smallest profile the task needs.
 |---|---|---|---|
 | `sealed` (default) | `Bash`, `Edit`, `Read`, `Write`, `Glob`, `Grep`; slash commands off | The repository and the check are all the task needs | Nothing: this is the tested team |
 | `research` | `sealed` plus `WebSearch`, `WebFetch` | Agents must read documentation or look things up | The team is no longer offline. A page can carry instructions to the agent, and what the agent puts in a search or URL leaves the machine. |
-| `allied` | `research` plus `Agent` (subagents) | An agent has large reading or search jobs to hand off | Whether the monitor sees the tool calls made inside a subagent is unproven, so treat a subagent's work as unmonitored |
+| `allied` | `research` plus `Agent` (subagents) | An agent has large reading or search jobs to hand off | A subagent works out of the agent's sight. Its tool calls pass the monitor and the sandbox like the agent's own (shown live); its report comes back through `SubagentHandback`, which the monitor passes on `allied` and `open` (not yet re-shown live) |
 | `open` | `allied` plus `Skill`; slash commands on | An agent should run its own `/goal` or `/loop`, or use skills | The agent sees your installed skills, and `/loop` and `/goal` add a second control loop beside the harness's own |
 
 In every profile: the shell has no network (the sandbox allows no domain, and a Bash call that asks
 for one with `allowed_domains` pauses the team), connectors (MCP servers) are off, a pause refuses
 every tool call, `tmux` and `claude` stay blocked, and only the merge job moves `main`.
 `WebFetch` may fetch only `http` and `https` pages on the public internet; a URL for this
-machine, its private network or a file pauses the team. Known limit: on Claude Code 2.1.331
-a session did not report `WebFetch` and fetched pages through a `web-fetch` subagent, which
-needs `Agent`; if `research` agents cannot fetch pages there, use `allied`. `harness/boss.sh
+machine, its private network or a file pauses the team. On Claude Code 2.1.331 a `research`
+session has the `WebFetch` tool itself; where `Agent` is present (`allied`, `open`) Claude Code
+drops it and fetches pages through a `web-fetch` subagent, whose fetches the monitor checks the
+same way. `harness/boss.sh
 status` lists each agent as `<agent>=<profile>`. An agent cannot start `/goal` itself (Claude Code
 treats it as a command typed by a person); put an `open` agent under `/goal` with
 `harness/boss.sh slash <id> "/goal <condition>"`, which `references/goal.md` explains. Not yet

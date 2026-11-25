@@ -134,9 +134,11 @@ harness's Stop hook take turns is unproven.
 - **Wake-ups during a pause.** `/loop` or a goal turn can wake a paused agent. The monitor
   refuses every tool call while the team is paused, skills included, so a wake-up costs
   tokens and does nothing.
-- **Subagents.** make-goal's casts delegate to subagents. Whether the monitor sees the tool
-  calls made inside them is unproven (`references/design.md`); treat their work as
-  unmonitored until a run shows otherwise. The merge job still checks everything that lands.
+- **Subagents.** make-goal's casts delegate to subagents. The monitor and the shell sandbox
+  apply to the tool calls made inside them (shown live in the profiles proof run; see
+  `references/design.md`), and a subagent's report comes back through `SubagentHandback`,
+  which the monitor passes on `open`. What a subagent reads and decides is still out of the
+  agent's sight. The merge job still checks everything that lands.
 - **Its files.** The contract, ledger and claims files live in the agent's workspace under
   `.goal/`. They are not part of the work: `setup.sh` excludes every dot-file at the top of
   a workspace from Git, and a merge that adds them is refused unless the allowed paths

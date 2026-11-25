@@ -372,4 +372,24 @@ check "L3 SKILL.md documents boss.sh slash" 'boss.sh slash' cat "$REPO/SKILL.md"
 check "L3 references/goal.md says how an open agent is put under /goal" 'boss.sh slash' cat "$REPO/references/goal.md"
 fi
 
+# ---- L1, L2, L4: what the live profiles run measured, written down
+if want L; then
+mk_workdir lead h1 h2 h3; setcfg agent_profiles '{"h1": "research", "h2": "allied", "h3": "open"}'; setup_wd
+DENY='"permissionDecision": "deny"'
+for a in lead h1 h2 h3; do
+  check "L4 the monitor refuses EndConversation ($a)" "$DENY" hook $a EndConversation '{}'
+  check "L4 the monitor refuses a plugin's tool, mcp__easel__chart ($a)" "$DENY" hook $a mcp__easel__chart '{"spec":"x"}'
+done
+halted && no "L4 and neither pauses the team" || ok "L4 and neither pauses the team"
+check  "L4 claude-code.md says live sessions were offered both" 'EndConversation.*mcp__easel__chart|mcp__easel__chart.*EndConversation' sh -c "tr '\n' ' ' < '$REPO/references/claude-code.md'"
+refute "L4 run-agent.sh no longer says only that no profile has MCP servers" 'No profile has MCP servers\.$' cat "$W/harness/run-agent.sh"
+refute "L1 SKILL.md no longer says research may lack WebFetch" 'did not report `WebFetch`' cat "$REPO/SKILL.md"
+check  "L1 SKILL.md: allied and open fetch through a web-fetch subagent" 'web-fetch' cat "$REPO/SKILL.md"
+refute "L1 claude-code.md no longer says only allied and open can fetch pages" 'only `allied` and `open` can fetch pages' sh -c "tr '\n' ' ' < '$REPO/references/claude-code.md' | tr -s ' '"
+for f in SKILL.md references/design.md references/goal.md references/claude-code.md; do
+  refute "L2 $f no longer calls the hook inside subagents unproven" -i 'inside (a )?subagents? (is|are) unproven|whether (the monitor sees the tool calls|.?PreToolUse.? fires)|^\| Tool calls made inside a subagent[^|]*\| Unproven' sh -c "tr '\n' ' ' < '$REPO/$f' | tr -s ' ' | sed 's/| |/|\n|/g'"
+done
+check "L2 design.md: shown live, the hook and the sandbox apply inside subagents" 'Tool calls made inside a subagent.*Shown live' cat "$REPO/references/design.md"
+fi
+
 finish

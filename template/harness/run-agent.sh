@@ -11,7 +11,9 @@ MODEL=$(python3 -c "import json;print(json.load(open('$R/config.json')).get('mod
 EFFORT=$(python3 -c "import json;print(json.load(open('$R/config.json')).get('effort') or 'medium')")
 [ -n "$MODEL" ] && RC+=(--model "$MODEL")
 # The agent's profile (harness/profiles.py) decides its tools. The default, sealed, is a shell and
-# file tools only: no web, no subagents, no slash commands or skills. No profile has MCP servers.
+# file tools only: no web, no subagents, no slash commands or skills. No profile has MCP servers
+# (--strict-mcp-config); sessions may still be offered EndConversation and tools that plugins
+# register, which the monitor (hook.py) refuses.
 read -r PROFILE TOOLS SLASH <<<"$(python3 "$R/harness/profiles.py" "$A")"
 [ -n "$TOOLS" ] || { echo "no profile for $A: check config.json (harness/profiles.py --check)"; exec bash; }
 [ "$SLASH" = slash-on ] || RC+=(--disable-slash-commands)
