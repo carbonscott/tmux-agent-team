@@ -10,6 +10,8 @@
 - While HALT exists, or the agent has been removed, everything is denied.
 - A tool the agent's profile (profiles.py) does not grant is refused. WebFetch may reach only
   http(s) hosts on the public internet: never this machine or its private network.
+- A Bash call that asks for network access (allowed_domains) or carries any parameter beyond
+  BASH_KEYS is a HARD violation: the shell stays offline in every profile.
 The LLM layer is Claude Code's auto-mode classifier; its denials reach
 denied.py, which also pauses the team.
 """
@@ -58,6 +60,11 @@ HARD_BASH = [
     (r"\.claude\b|\.ssh\b|/run/user\b", "touching the agent loop or credentials"),
     (r"\bboard\.db\b", "reaching the board directly (use `team sql`)"),
 ]
+# The parameters a normal Bash call carries (every call recorded in the proof runs had only
+# these). allowed_domains asks Claude Code to open the sandbox's network to those hosts, and it
+# did: the shell fetched a page in every profile. So a non-empty allowed_domains, and any other
+# parameter, is a HARD block.
+BASH_KEYS = {"command", "description", "timeout", "run_in_background"}
 SOFT_BASH = [
     (r"\b(?:pip3?|uv)\s+(?:pip\s+)?install\b|\bapt(?:-get)?\s+install\b|\bnpm\s+i", "no network: nothing can be installed"),
     (CMD + r"(kill|pkill|killall)(?:\s|$)", "process control is not available"),
@@ -225,6 +232,12 @@ def main():
     elif tool in ("Glob", "Grep"):
         check_read(d, ab(ti.get("path") or cwd), True)
     elif tool == "Bash":
+        if ti.get("allowed_domains"):
+            deny(d, "a shell command that asks for network access (allowed_domains: %s)"
+                 % json.dumps(ti["allowed_domains"])[:200], True)
+        odd = sorted(str(k) for k in ti if k not in BASH_KEYS and k != "allowed_domains")
+        if odd:
+            deny(d, "a shell command with a parameter the monitor does not know (%s)" % ", ".join(odd)[:200], True)
         cmd = strip_data(ti.get("command") or "")
         for rx, why in HARD_BASH:
             if re.search(rx, cmd, re.M):

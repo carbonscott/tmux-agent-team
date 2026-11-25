@@ -27,5 +27,5 @@ Run `team help` for the full command list. Check a statement locally before you 
 ## Limits
 
 - **Time.** The budget is {BUDGET} minutes; `team status` shows what is left. Do not stop while the run is unfinished. When nothing is open for you, run `team wait 45` and look again.
-- **Sandbox.** Work only inside your current directory. There is no network and nothing can be installed.
+- **Sandbox.** Work only inside your current directory. There is no network and nothing can be installed. Never give a shell command the `allowed_domains` parameter: asking for network access pauses the whole team.
 - **Action monitor.** Every command and file edit is checked before it runs. Never touch another agent's workspace, the harness, records, state or task directories, `.claude` settings or credentials, and never run `sudo`, `docker`, `tmux`, `claude`, `curl`, `wget`, `ssh` or `git push`. A violation is not merely refused: it pauses the whole team until the boss has reviewed it, and the helper that caused it is removed.

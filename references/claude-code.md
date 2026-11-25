@@ -7,7 +7,7 @@ Check flags and settings against your own version.
 |---|---|---|
 | Separate sessions | One `claude` process per tmux window, started with the brief as its first message | `harness/run-agent.sh`, `launch.sh` |
 | Profiles | `--tools` gets the profile's list; `sealed`, `research` and `allied` add `--disable-slash-commands`, `open` leaves it out and adds `Skill`. `--strict-mcp-config` with no server keeps connectors off in every profile. The default, `sealed`, is `--tools Bash,Edit,Read,Write,Glob,Grep`: no web access, subagents, Claude Code's own cross-session messaging or connectors. Messages between agents go through the gateway instead (`team msg`) | `harness/profiles.py`, `harness/run-agent.sh` |
-| Walls | The shell sandbox, per agent: `denyRead` on the harness, records, state, task files, other workspaces and the rest of the home directory (every entry of `~/.claude` but `shell-snapshots/`, every dot-entry of `~` but a short list); no network domains | `harness/mk_settings.py` |
+| Walls | The shell sandbox, per agent: `denyRead` on the harness, records, state, task files, other workspaces and the rest of the home directory (every entry of `~/.claude` but `shell-snapshots/`, every dot-entry of `~` but a short list); no network domains, and the monitor refuses a Bash call that asks for some (`allowed_domains`) | `harness/mk_settings.py`, `harness/hook.py` |
 | Door | `team` writes a request file into `.gw/req` in the workspace and waits for the reply in `.gw/resp` | `bin/team` |
 | Board | One SQLite file in `state/`, opened only by the gateway. `me()` is a SQL function the gateway binds per agent; an authorizer limits what helpers may run, and refuses every write to the gateway's own tables (`messages`, `message_reads`) | `harness/gateway.py` (`Board`) |
 | Merge job | Scratch worktree, path allowlist, the task's check inside bubblewrap with no network | `harness/gateway.py` (`do_mr`, `run_check`) |
@@ -31,6 +31,12 @@ Check flags and settings against your own version.
 - **`--tools` takes a list and will swallow the prompt.** Put `--` before the prompt.
 - **Hooks run outside the sandbox.** That is why they can write the records and the pause
   flag where the agent's shell cannot.
+- **The Bash tool takes `allowed_domains`.** On 2.1.331 and 2.1.332 a Bash call with
+  `allowed_domains: ["example.com"]` fetched the page from the shell (HTTP 200) in every
+  profile, although the settings allow no domain. So `hook.py` pauses the team on a non-empty
+  `allowed_domains`, and on any Bash parameter but `command`, `description`, `timeout` and
+  `run_in_background` (the only ones the proof runs' 1,866 recorded calls carried, besides
+  `allowed_domains`). `selftest.sh` step 14 shows it before launch.
 - **`autoAllowBashIfSandboxed` is false**, so that sandboxed commands are not approved
   automatically and the agents' commands go through auto mode.
 - **Stop hooks have a cap** on consecutive blocks, according to the documentation. The

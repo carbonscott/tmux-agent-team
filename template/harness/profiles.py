@@ -5,8 +5,9 @@
   profiles.py --list      print <agent>=<profile> for every agent, on one line
 
 config.json: "profile" is the team's default (sealed if absent); "agent_profiles" maps an agent
-name to a profile and overrides the default for that agent. The shell sandbox is the same in
-every profile: no network domains. The monitor (hook.py) refuses every tool a profile does not grant.
+name to a profile and overrides the default for that agent. The shell has no network in every
+profile: the sandbox allows no domain, and the monitor (hook.py) pauses the team on a Bash call
+that asks for one (allowed_domains). The monitor refuses every tool a profile does not grant.
 """
 import json
 import os

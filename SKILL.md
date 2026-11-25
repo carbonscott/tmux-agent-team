@@ -101,7 +101,8 @@ tool the profile does not grant. Choose the smallest profile the task needs.
 | `allied` | `research` plus `Agent` (subagents) | An agent has large reading or search jobs to hand off | Whether the monitor sees the tool calls made inside a subagent is unproven, so treat a subagent's work as unmonitored |
 | `open` | `allied` plus `Skill`; slash commands on | An agent should run its own `/goal` or `/loop`, or use skills | The agent sees your installed skills, and `/loop` and `/goal` add a second control loop beside the harness's own |
 
-In every profile: the shell has no network, connectors (MCP servers) are off, a pause refuses
+In every profile: the shell has no network (the sandbox allows no domain, and a Bash call that asks
+for one with `allowed_domains` pauses the team), connectors (MCP servers) are off, a pause refuses
 every tool call, `tmux` and `claude` stay blocked, and only the merge job moves `main`.
 `WebFetch` may fetch only `http` and `https` pages on the public internet; a URL for this
 machine, its private network or a file pauses the team. Known limit: on Claude Code 2.1.331

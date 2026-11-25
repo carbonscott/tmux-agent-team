@@ -95,4 +95,32 @@ check "A3 selftest: the expectations name step 13" '13  prints 0 or an error' ec
 refute "A3 selftest: it cleans up after itself" . sh -c "ls '$W/state/HALT' '$W/state/selftest.json' 2>/dev/null"
 fi
 
+# ---- J: a Bash call that asks for network (allowed_domains) or carries a parameter the monitor does not know
+if want J; then
+mk_workdir lead h1 h2 h3; setcfg agent_profiles '{"h1": "research", "h2": "allied", "h3": "open"}'; setup_wd
+NET='{"command":"python3 -c \"import urllib.request\"","description":"fetch","allowed_domains":["example.com"]}'
+for a in lead h1 h2 h3; do
+  hook $a Bash "$NET" > "$TOP/out" 2>&1
+  grep -q "$BLOCK" "$TOP/out" && halted && ok "J allowed_domains is a HARD block (pause) for $a" || no "J allowed_domains is a HARD block (pause) for $a" "$(cat "$TOP/out")"
+done
+check "J the HALT names allowed_domains" 'allowed_domains' cat "$W/state/HALT"
+check "J and the record says block" '"allowed_domains": \["example.com"\]}, "decision": "block"' tail -1 "$W/records/actions.jsonl"
+for extra in '"dangerouslyDisableSandbox":true' '"dangerouslyDisableSandbox":false' '"sandbox":"off"' '"network":true'; do
+  hook h1 Bash "{\"command\":\"ls\",$extra}" > "$TOP/out" 2>&1
+  grep -q "$BLOCK" "$TOP/out" && halted && ok "J an unknown Bash parameter is a HARD block: $extra" || no "J an unknown Bash parameter is a HARD block: $extra" "$(cat "$TOP/out")"
+done
+for ti in '{"command":"ls"}' '{"command":"ls","description":"list"}' '{"command":"ls","description":"list","timeout":60000}' \
+          '{"command":"ls","run_in_background":true}' '{"command":"ls","allowed_domains":[]}'; do
+  hook h1 Bash "$ti" > "$TOP/out" 2>&1
+  [ ! -s "$TOP/out" ] && ! halted && ok "J a normal Bash call passes: $ti" || no "J a normal Bash call passes: $ti" "$(cat "$TOP/out")"
+done
+fake_claude; out=$(selftest)
+check "J selftest: step 14 asks for allowed_domains and is blocked" '"step": 14, .*"decision": "deny"' calls
+check "J selftest: and says so" 'PASS  a Bash call with allowed_domains \(step 14\) paused the team' echo "$out"
+check "J selftest: the expectations name step 14" '14  BLOCKED by the action monitor' echo "$out"
+for f in SKILL.md references/design.md template/docs/helper.md template/docs/lead.md template/harness/profiles.py; do
+  check "J $f says the monitor rule keeps the shell offline" 'allowed_domains' cat "$REPO/$f"
+done
+fi
+
 finish
