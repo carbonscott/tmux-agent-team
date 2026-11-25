@@ -499,4 +499,27 @@ check "O paused: the stall clock shows 3 of 4 min, not 5" 'stall clock: 3 of 4 m
 check "O and says it stopped at the pause" 'stall clock: 3 of 4 min.*stopped at the start of the pause' echo "$out"
 fi
 
+# ---- P: a stall reopened with boss.sh unstall stays in the run's story
+if want P; then
+mk_workdir lead h1; setcfg stall_min 30; setup_wd; launch >/dev/null 2>&1
+stall() { python3 -c "
+import json, time; now = time.time()
+json.dump(dict(ts=now - $1, stall_min=30, idle_s=1800, since=now - $1 - 1800, landed=[]), open('$W/state/STALLED', 'w'))"; }
+stall 120; ( cd "$W" && harness/boss.sh unstall ) >/dev/null
+rep() { ( cd "$W" && python3 harness/report.py -o "$TOP/p.html" ) >/dev/null 2>&1; cat "$TOP/p.html"; }
+p=$(rep)
+check "P the report lists a reopened stall" 'STALLED</b> at [0-9:]+ .*reopened at [0-9:]+' echo "$p"
+check "P and draws it on the timeline" 'class="rule stall"' echo "$p"
+out=$(cd "$W" && python3 harness/offline_monitor.py)
+check "P offline_monitor.py lists it, with when it was reopened" 'STALLED at [0-9:]+.*reopened at [0-9:]+' echo "$out"
+stall 10
+p=$(rep)
+check "P a second stall: the report lists both" '^2$' sh -c "grep -o '<b>STALLED</b>' '$TOP/p.html' | wc -l"
+out=$(cd "$W" && python3 harness/offline_monitor.py)
+check "P offline_monitor.py lists both" '^2$' sh -c "echo \"\$1\" | grep -c 'STALLED at'" sh "$out"
+out=$(cd "$W" && ./teardown.sh --archive "$TOP" 2>&1)
+mkdir -p "$TOP/u"; tar -xzf "$(echo "$out" | sed -n 's/^archived: //p')" -C "$TOP/u"
+check "P the archive's STATUS.txt counts the stalls, reopened ones included" '^stalls: +2 \(1 reopened' cat "$TOP"/u/*/STATUS.txt
+fi
+
 finish

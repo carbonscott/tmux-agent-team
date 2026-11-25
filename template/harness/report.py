@@ -248,6 +248,20 @@ def gather():
     g["removed"] = sorted(((t, a) for t, a in (F.get("removed") or [])), key=lambda x: x[0] or 0)
     g["rejected"] = [x for x in g["gw"] if x.get("op") == "mr" and x.get("code") != 0]
     g["msgs"] = messages(g["gw"])
+    # every stall: those reopened with boss.sh unstall (records/stalled.<reopened>.json), then the
+    # one in progress, if any
+    g["stalls"] = []
+    for p in glob.glob(REC + "/stalled.*.json"):
+        s = jfile(p) or {}
+        try:
+            s["reopened"] = float(os.path.basename(p).split(".")[1])
+        except (IndexError, ValueError):
+            s["reopened"] = os.path.getmtime(p)
+        s["ts"] = float(s.get("ts") or s["reopened"])
+        g["stalls"].append(s)
+    g["stalls"].sort(key=lambda s: s["ts"])
+    if g["stalled"] is not None:
+        g["stalls"].append(dict(g["stalled"], reopened=None))
     return g
 
 
@@ -360,9 +374,10 @@ def timeline(g):
         if b:
             over.append('<i class="band down" style="left:%.3f%%;width:%.3f%%" title="%s"></i>' % (
                 pct(a, t0, t1), max(0.4, pct(b, t0, t1) - pct(a, t0, t1)), e("down %s, resumed %s" % (span(b - a), clock(b)))))
-    if g["stalled"] is not None:
+    for st in g["stalls"]:
         over.append('<i class="rule stall" style="left:%.3f%%" title="%s"></i>' % (
-            pct(g["stalled"]["ts"], t0, t1), e("stalled at %s" % clock(g["stalled"]["ts"]))))
+            pct(st["ts"], t0, t1), e("stalled at %s%s" % (clock(st["ts"]), ", reopened at %s" % clock(st["reopened"])
+                                                         if st.get("reopened") else ""))))
     if g["deadline"] and t0 <= g["deadline"] <= t1:
         over.append('<i class="rule deadline" style="left:%.3f%%" title="deadline %s"></i>' % (
             pct(g["deadline"], t0, t1), e(clock(g["deadline"]))))
@@ -516,11 +531,12 @@ def page(g):
         resumes.append([e(clock(r.get("ts"))), e(span(r.get("down_s"))), e(clock(r.get("last_beat"))), e(given),
                         e(clock(r.get("deadline_after"))), e("; ".join(notes))])
     events = []
-    if g["stalled"] is not None:
-        st = g["stalled"]
-        events.append("<li><b>STALLED</b> at %s (%s): %s</li>" % (
+    for st in g["stalls"]:
+        events.append("<li><b>STALLED</b> at %s (%s): %s%s</li>" % (
             e(clock(st["ts"])), e(rel(st["ts"])),
-            e("no merge accepted for %s min" % st["stall_min"] if "stall_min" in st else "no progress")))
+            e("no merge accepted for %s min" % st["stall_min"] if "stall_min" in st else "no progress"),
+            e("; reopened at %s (%s) with boss.sh unstall" % (clock(st["reopened"]), rel(st["reopened"])))
+            if st.get("reopened") else ""))
     total_msgs = sum(g["msgs"].values())
     pairs = [[e(s), e(r), e(k)] for (s, r), k in sorted(g["msgs"].items())]
     budget = F.get("budget_min")

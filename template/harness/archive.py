@@ -15,6 +15,7 @@ mistake for live state. Everything is under one folder named like the file.
 Progress goes to stderr; the full path of the file is the only thing printed on stdout. The
 archive is read back before this exits 0, and teardown.sh deletes nothing unless it does.
 """
+import glob
 import io
 import json
 import os
@@ -81,6 +82,7 @@ def status_text(verify_ok, verify_out, stopped):
                           text=True).stdout.strip() or "unknown"
     removed = sorted(os.listdir(STATE + "/removed")) if os.path.isdir(STATE + "/removed") else []
     flags = [f for f in ("DONE", "HALT", "STALLED") if os.path.exists(STATE + "/" + f)]
+    reopened = len(glob.glob(R + "/records/stalled.*.json"))      # stalls reopened with boss.sh unstall
     resumes = read(R + "/records/resumes.jsonl").splitlines()
     sent = 0
     for line in read(R + "/records/gateway.jsonl").splitlines():
@@ -108,6 +110,8 @@ def status_text(verify_ok, verify_out, stopped):
         "main:             %s" % main,
         "removed helpers:  %s" % (" ".join(removed) or "-"),
         "state at stop:    %s" % (" ".join(flags) or "-"),
+        "stalls:           %d%s" % (reopened + ("STALLED" in flags),
+                                     " (%d reopened with boss.sh unstall)" % reopened if reopened else ""),
         "resumes:          %d" % len([r for r in resumes if r.strip()]),
         "messages:         %d (team msg; each is in records/gateway.jsonl)" % sent,
     ]
@@ -121,7 +125,8 @@ def status_text(verify_ok, verify_out, stopped):
               "  central.git/  the bare repository; the result is its main branch: git clone central.git <dir>",
               "  records/      every tool call (actions.jsonl), gateway request (gateway.jsonl) and merge",
               "                (merges.jsonl) of the run, every message (gateway.jsonl, op msg), any",
-              "                reviewed pauses (halt.*.json) and resumes after a crash (resumes.jsonl);",
+              "                reviewed pauses (halt.*.json), stalls reopened with boss.sh unstall",
+              "                (stalled.*.json) and resumes after a crash (resumes.jsonl);",
               "                run.json, the run's facts (started, ended, done, agents, profiles); and",
               "                report.html, the run's page. Rebuild the page with any copy of the template:",
               "                python3 harness/report.py --records <this folder>/records",

@@ -7,6 +7,7 @@ records/merges.jsonl (what the merge job landed) and records/resumes.jsonl (each
 list of items worth a human (or LLM) look.
 """
 import collections
+import glob
 import json
 import os
 import re
@@ -50,12 +51,18 @@ fails = [g for g in gw if g["op"] == "sql" and g["code"] != 0]
 print("== board requests that failed: %d" % len(fails))
 for g in fails[:25]:
     print("  %s %-5s %-60s -> %s" % (hhmm(g["ts"]), g["agent"], g["detail"].replace("\n", " ")[:60], g["out"].splitlines()[0][:60]))
-try:
-    st = json.load(open(R + "/state/STALLED"))
-    print("== run STALLED at %s: no merge accepted for %d min (stall_min %s)"
-          % (hhmm(st["ts"]), st["idle_s"] // 60, st["stall_min"]))
-except (OSError, ValueError, KeyError):
-    pass
+stalls = []      # every stall: those reopened with boss.sh unstall, then the one in progress
+for p in glob.glob(R + "/records/stalled.*.json") + [R + "/state/STALLED"]:
+    try:
+        st = json.load(open(p))
+        reopened = None if p.endswith("/STALLED") else float(os.path.basename(p).split(".")[1])
+        stalls.append((float(st["ts"]), st, reopened))
+    except (OSError, ValueError, KeyError, TypeError, IndexError):
+        pass
+for ts, st, reopened in sorted(stalls, key=lambda x: (x[2] is None, x[0])):
+    print("== run STALLED at %s: no merge accepted for %d min (stall_min %s)%s"
+          % (hhmm(ts), int(st.get("idle_s") or 0) // 60, st.get("stall_min"),
+             "; reopened at %s with boss.sh unstall" % hhmm(reopened) if reopened else ""))
 print("== merges landed: %d" % len(merges))
 for m in merges:
     print("  %s %-5s %-50s files=%s" % (hhmm(m["ts"]), m["agent"], m["title"][:50], ",".join(m["files"])))
