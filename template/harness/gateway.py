@@ -108,6 +108,7 @@ def stall_msg():
             "Stop working." % s.get("stall_min", "?"))
 
 
+PAUSED, OVER = 3, 4       # exit statuses: the team is paused; the run is over for this agent
 CLOSED = ("RUN COMPLETE: every statement is on main, so main is closed: nothing more lands, and the merge "
           "job gives no more verdicts. You may stop.")
 
@@ -394,9 +395,9 @@ def do_mr(agent, title):
         return code, msg
     with MERGE_LOCK:
         if stalled() is not None:
-            return 1, msg + "\nREJECTED: " + stall_msg()
+            return OVER, msg + "\nREJECTED: " + stall_msg()
         if os.path.exists(STATE + "/DONE"):      # the run completed while this request waited
-            return 3, msg + "\nREJECTED: " + CLOSED
+            return OVER, msg + "\nREJECTED: " + CLOSED
         _, main = git("rev-parse", "refs/heads/main", cwd=CENTRAL)
         if git("merge-base", "--is-ancestor", head, main, cwd=CENTRAL)[0] == 0:
             return 1, msg + "\nREJECTED: nothing new, your HEAD is already contained in main."
@@ -601,28 +602,50 @@ def watch():
 
 
 # -------------------------------------------------------------------- serve
+def is_removed(agent):
+    return os.path.exists("%s/removed/%s" % (STATE, agent))
+
+
+def run_over():
+    """True once the run is over for everyone: complete, stalled or out of time."""
+    left = time_left()
+    return os.path.exists(STATE + "/DONE") or stalled() is not None or (left is not None and left <= 0)
+
+
 def handle(agent, board, req):
     op = str(req.get("op"))
     h = halted()
     if h:
-        return 3, ("TEAM PAUSED by the action monitor (%s: %s). Stop working and wait for the boss."
-                   % (h.get("agent"), h.get("reason"))), op
-    if os.path.exists("%s/removed/%s" % (STATE, agent)):
-        return 3, "You have been removed from the team by the boss. Stop working.", op
+        return PAUSED, ("TEAM PAUSED by the action monitor (%s: %s). Stop working and wait for the boss."
+                        % (h.get("agent"), h.get("reason"))), op
+    if is_removed(agent):
+        return OVER, "You have been removed from the team by the boss. Stop working.", op
     if op == "whoami":
         return 0, agent, op
+    if op == "wait":
+        # Sleep here, not in the client, so that a pause or the end of the run ends the wait at once.
+        try:
+            secs = max(1.0, min(110.0, float(req.get("seconds") or 30)))
+        except (TypeError, ValueError):
+            secs = 30.0
+        end = time.time() + secs
+        while time.time() < end and not halted() and not is_removed(agent) and not run_over():
+            time.sleep(max(0.0, min(1.0, end - time.time())))
+        code, out, _ = handle(agent, board, {"op": "status"})
+        return code, out, "wait %d" % secs
     if stalled() is not None and op != "status":
-        return 3, stall_msg(), op
+        return OVER, stall_msg(), op
     if op == "status":
         n = board.unread()
-        return 0, status_text(agent) + ("\nunread messages: %d (read them: team inbox)" % n if n else ""), op
+        return (OVER if run_over() else 0), status_text(agent) + (
+            "\nunread messages: %d (read them: team inbox)" % n if n else ""), op
     if op == "inbox":
         return do_inbox(board, bool(req.get("all")))
     if op in ("mr", "precheck") and os.path.exists(STATE + "/DONE"):
-        return 3, CLOSED, op
+        return OVER, CLOSED, op
     left = time_left()
     if left is not None and left <= 0 and op in ("sql", "push", "mr", "msg", "precheck"):
-        return 3, "TIME IS UP: the run has ended. Stop working.", op
+        return OVER, "TIME IS UP: the run has ended. Stop working.", op
     if op == "msg":
         return do_msg(agent, board, str(req.get("to", "")), str(req.get("body", "")))
     if op == "sql":

@@ -429,4 +429,40 @@ check "DONE the board still answers" '^1$' as h2 team sql "SELECT 1 AS one"
 check "DONE design.md says main closes at RUN COMPLETE" 'is closed once the run is complete' cat "$REPO/references/design.md"
 fi
 
+# ---- R: the end of a run cannot be filtered away: team status and team wait exit non-zero, and wait returns at once
+if want R; then
+mk_workdir lead h1 h2; setup_wd; launch >/dev/null 2>&1; start_gateway
+rc_of() { "$@" >/dev/null 2>&1; echo $?; }
+check "R a running run: team status exits 0" '^0$' rc_of as h1 team status
+check "R and team wait 1 exits 0" '^0$' rc_of as h1 team wait 1
+echo '{"ts": 0, "agent": "h2", "reason": "test"}' > "$W/state/HALT"
+t0=$(date +%s); rc=$(rc_of as h1 team wait 60); dt=$(( $(date +%s) - t0 ))
+[ "$rc" = 3 ] && [ $dt -le 5 ] && ok "R paused: team wait returns at once with exit 3 ($dt s)" || no "R paused: team wait returns at once with exit 3" "rc=$rc after ${dt}s"
+rm -f "$W/state/HALT"
+( as h1 team wait 60 > "$TOP/w.out" 2> "$TOP/w.err"; echo $? > "$TOP/w.rc" ) & pw=$!
+sleep 2; t0=$(date +%s)
+echo '{"ts": 1, "stall_min": 30, "idle_s": 1800}' > "$W/state/STALLED"
+wait $pw; dt=$(( $(date +%s) - t0 ))
+[ "$(cat "$TOP/w.rc")" = 4 ] && [ $dt -le 4 ] && ok "R a stall during team wait ends the wait at once with exit 4 ($dt s)" || no "R a stall during team wait ends the wait at once with exit 4" "rc=$(cat "$TOP/w.rc") after ${dt}s"
+check "R the reason is on stdout" 'STALLED' cat "$TOP/w.out"
+check "R and on stderr" 'STALLED' cat "$TOP/w.err"
+t0=$(date +%s); out=$(as h1 sh -c 'team wait 100 | grep -v STALLED' 2>&1); dt=$(( $(date +%s) - t0 ))
+[ $dt -le 4 ] && grep -q STALLED <<<"$out" && ok "R team wait 100 | grep -v STALLED: returns at once, and the stall still shows" || no "R team wait 100 | grep -v STALLED: returns at once, and the stall still shows" "${dt}s: $out"
+check "R stalled: team status exits 4" '^4$' rc_of as h1 team status
+rm -f "$W/state/STALLED"
+cp "$W/state/deadline" "$TOP/deadline"; ( cd "$W" && harness/boss.sh end ) >/dev/null
+check "R time up: team status exits 4" '^4$' rc_of as h1 team status
+check "R time up: team wait exits 4" '^4$' rc_of as h1 team wait 30
+cp "$TOP/deadline" "$W/state/deadline"
+( cd "$W" && harness/boss.sh remove h2 ) >/dev/null
+check "R removed: team status exits 4" '^4$' rc_of as h2 team status
+land h1 a >/dev/null 2>&1; land h1 b >/dev/null 2>&1; land h1 c >/dev/null 2>&1
+check "R complete: team status exits 4" '^4$' rc_of as h1 team status
+check "R complete: and says so on stderr" 'RUN COMPLETE' sh -c "cd '$W/ws/h1' && PATH='$W/bin:$PATH' team status 2>&1 >/dev/null"
+for a in lead h1; do
+  check "R $a's brief says what a non-zero exit from team wait means" 'non-zero exit from `team wait`' sh -c "cd '$W' && python3 harness/render.py $a"
+  check "R $a's rejoining brief says it too" 'non-zero exit from `team wait`' sh -c "cd '$W' && python3 harness/render.py $a --resume"
+done
+fi
+
 finish

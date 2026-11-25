@@ -87,7 +87,7 @@ The other limits guard single operations against a hang; none of them limits the
 | `task.check_timeout_s` (180 s) | One check in the merge job: a hung test cannot block every merge |
 | `sql_timeout_s` (5 s) | One board request: a runaway query cannot lock the board for everyone |
 | `wait-run.sh` 540 s | Claude Code caps one command at 10 minutes, so you wait in slices |
-| `team wait` 110 s | The same cap, on the agents' side |
+| `team wait` 110 s | The same cap, on the agents' side. The wait ends at once when the team is paused (exit status 3) or the run is over for the agent (4: complete, stalled, out of time, removed); `team status` exits the same way, with the reason on stderr too |
 
 #### Profiles
 
