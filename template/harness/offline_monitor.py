@@ -1,8 +1,9 @@
 """Offline monitor: review the run records after the fact.
 
 Reads records/actions.jsonl (every tool call, from the PreToolUse hook),
-records/gateway.jsonl (every database / git request, stamped by the gateway)
-and records/merges.jsonl (what the merge job landed). Prints a summary and a
+records/gateway.jsonl (every database / git request, stamped by the gateway),
+records/merges.jsonl (what the merge job landed) and records/resumes.jsonl (each
+./launch.sh --resume after an interruption, with the time the run was down). Prints a summary and a
 list of items worth a human (or LLM) look.
 """
 import collections
@@ -57,6 +58,13 @@ print("== merge requests rejected: %d" % len(rej))
 for g in rej:
     why = next((l for l in g["out"].splitlines() if l.startswith("REJECTED")), g["out"][:100])
     print("  %s %-5s %-40s %s" % (hhmm(g["ts"]), g["agent"], g["detail"][:40], why[:90]))
+
+resumes = load("resumes.jsonl")
+print("== resumes after an interruption: %d" % len(resumes))
+for r in resumes:
+    print("  %s down %d min %d s, %d s given back%s%s" % (
+        hhmm(r["ts"]), r["down_s"] // 60, r["down_s"] % 60, r.get("given_back_s", r["down_s"]),
+        ", resumed paused" if r.get("paused") else "", ", " + r["beat_from"] if r.get("beat_from", "heartbeat") != "heartbeat" else ""))
 
 flags = []
 for a in acts:

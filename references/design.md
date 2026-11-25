@@ -54,6 +54,7 @@ orders are, which keeps the briefs short and shows that the board carries everyt
 | Authorship of board rows | A helper's rows default to its own name, and every request is logged under the true sender. A helper can still type another name into a column; the log shows who really wrote it. |
 | Removing a helper | The gateway and monitor refuse it. Reopening its tasks is left to the lead. Never exercised. |
 | Agents isolated from the boss's account | Not enforced. All sessions run as one OS user with one login. The sandbox confines their shell commands; the agent processes themselves are outside it. |
+| Resuming after a crash | `launch.sh --resume` refuses unless the run is interrupted and its files check out, and gives back the time down measured from the gateway's heartbeat (tested with stubs). That the lead reopens the claims of helpers that do not return is only requested by its rejoining brief. A real crash and resume has never been run. |
 | Putting a run away | `teardown.sh --archive` keeps only the repository, the records and `STATUS.txt`, writes beside the work directory and never into it, refuses to overwrite, and deletes nothing until the file has been read back. Tested with the stub tmux only; never used on a real run. Nothing stops a boss from leaving a run's files lying around instead. |
 | Honest results | A test suite is a weaker check than a proof. The merge job limits which paths change; it does not inspect what the code does. |
 | Tools outside the agent's profile | Enforced twice: the session is started with only the profile's tools (`--tools`), and the monitor refuses any other tool. Tested with stubs only. |
@@ -65,7 +66,37 @@ orders are, which keeps the briefs short and shows that the board carries everyt
 
 Not yet exercised in any run: any profile other than `sealed` (only stub-based tests have
 started one), WebFetch through a `web-fetch` subagent, splitting a task, moving a helper between crews, the
-five-minute reminder, a slow check, a helper dying mid-task, and teams larger than four.
+five-minute reminder, a slow check, a helper dying mid-task, teams larger than four, and
+resuming a run after a real crash (`launch.sh --resume` has run only against stub tmux and
+claude).
+
+## Resuming after a crash
+
+Everything a run needs lives on disk: `main` in `central.git`, the board in `state/board.db`
+(write-ahead log, survives a killed process), the clock and removals in `state/`, and each
+agent's unmerged work in its workspace. The tmux session holds nothing that cannot be
+rebuilt, so `launch.sh --resume` rebuilds it. The choices made:
+
+- **Time down is given back, measured by a heartbeat.** The gateway writes `state/heartbeat`
+  every 2 s; the time down is now minus that beat. The deadline (and the stall clock, when
+  there is one) moves by that amount, the way `boss.sh resume` gives back a pause. A resume
+  writes a fresh beat at once, so a second crash before the gateway beats cannot give the
+  same time back twice. Without a heartbeat (a run older than it) the newest file in
+  `state/` and `records/` stands in, and the record says so.
+- **Interrupted, ended, complete.** A run that had run out of time or stalled before it died
+  is `ended`, not interrupted: nothing is resumed, it is archived. A paused run resumes
+  paused, and gives back no time at resume: clearing the pause gives back both.
+- **Fresh sessions with a rejoining brief, not `claude --continue`.** It keeps the cold-start
+  rule (8): what an agent knows comes from the board and its workspace, not from a
+  transcript the harness does not control. The cost is that each agent spends its first
+  minutes finding its place.
+- **Removed helpers stay removed** and get no window; the lead's rejoining brief names them
+  so their claims are reopened at once.
+
+What a resume does not cover: a lost disk (copy `central.git`, `records/` and a `sqlite3
+.backup` of the board elsewhere), a crash in the middle of a merge (the scratch worktree
+under `state/ci/` is left behind; `main` moves only by one atomic ref update, so it is
+either merged or not), and an agent's train of thought.
 
 ## Profiles
 
