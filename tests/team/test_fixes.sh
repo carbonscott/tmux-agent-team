@@ -73,8 +73,15 @@ for n, cmd in re.findall(r"^(\d+)\. (.*)$", prompt, re.M):
     ti = {"command": cmd, "description": "step " + n}
     if "allowed_domains" in cmd:
         ti = {"command": cmd.split("   (")[0], "description": "step " + n, "allowed_domains": ["example.com"]}
-    out = subprocess.run([sys.executable, R + "/harness/hook.py", agent], input=json.dumps(
-        {"tool_name": "Bash", "tool_input": ti, "cwd": ws}), capture_output=True, text=True).stdout
+    calls = [("Bash", ti, {})]
+    if "Agent tool" in cmd:      # the subagent runs the command and hands its result back
+        calls = [("Agent", {"prompt": cmd, "description": "step " + n, "subagent_type": "general-purpose"}, {}),
+                 ("Bash", {"command": "echo handback-ok"}, {"agent_id": "s1", "agent_type": "general-purpose"}),
+                 ("SubagentHandback", {"message": "handback-ok"}, {"agent_id": "s1", "agent_type": "general-purpose"})]
+    out = ""
+    for tool, ti, more in calls:
+        out += subprocess.run([sys.executable, R + "/harness/hook.py", agent], input=json.dumps(
+            dict({"tool_name": tool, "tool_input": ti, "cwd": ws}, **more)), capture_output=True, text=True).stdout
     log.write(json.dumps({"step": int(n), "command": cmd, "decision": "deny" if "deny" in out else "pass",
                           "why": out[:300]}) + "\n")
 PY
@@ -114,7 +121,7 @@ for ti in '{"command":"ls"}' '{"command":"ls","description":"list"}' '{"command"
   hook h1 Bash "$ti" > "$TOP/out" 2>&1
   [ ! -s "$TOP/out" ] && ! halted && ok "J a normal Bash call passes: $ti" || no "J a normal Bash call passes: $ti" "$(cat "$TOP/out")"
 done
-fake_claude; out=$(selftest)
+fake_claude; out=$(selftest lead)
 check "J selftest: step 14 asks for allowed_domains and is blocked" '"step": 14, .*"decision": "deny"' calls
 check "J selftest: and says so" 'PASS  a Bash call with allowed_domains \(step 14\) paused the team' echo "$out"
 check "J selftest: the expectations name step 14" '14  BLOCKED by the action monitor' echo "$out"
@@ -140,6 +147,37 @@ echo '{"ts": 0, "agent": "h2", "reason": "test"}' > "$W/state/HALT"
 check "K a pause refuses it too" "$DENY" sh -c "echo '{\"tool_name\":\"SubagentHandback\",\"tool_input\":{\"message\":\"x\"},\"cwd\":\"$W/ws/h2\"$IN}' | python3 '$W/harness/hook.py' h2"
 rm -f "$W/state/HALT"
 check "K references/claude-code.md names SubagentHandback" 'SubagentHandback' cat "$REPO/references/claude-code.md"
+fi
+
+# ---- M: selftest.sh starts its sessions with the tested agent's profile, as run-agent.sh would
+if want M; then
+mk_workdir lead h1 h2 h3; setcfg agent_profiles '{"h1": "research", "h2": "allied", "h3": "open"}'; setup_wd; fake_claude
+argv_tools() { python3 -c "
+import json, sys
+for l in open(sys.argv[1]):
+    d = json.loads(l)
+    if 'argv' in d:
+        a = d['argv']; print(a[a.index('--tools') + 1], 'slash-off' if '--disable-slash-commands' in a else 'slash-on')" "$STUB_DIR/selftest.calls" | sort -u; }
+want_tools() { read -r _ t s <<<"$(cd "$W" && python3 harness/profiles.py "$1")"; echo "$t $s"; }
+for a in lead h1 h2 h3; do
+  out=$(selftest $a)
+  [ "$(argv_tools)" = "$(want_tools $a)" ] && ok "M selftest.sh $a: both sessions get $a's tools and slash setting" || no "M selftest.sh $a: both sessions get $a's tools and slash setting" "$(argv_tools) / $(want_tools $a)"
+  check "M selftest.sh $a: the header names the profile" "Session under test: $a, profile $(cd "$W" && python3 harness/profiles.py $a | cut -d' ' -f1)" echo "$out"
+  check "M selftest.sh $a: the allowed_domains step pauses the team" 'PASS  a Bash call with allowed_domains' echo "$out"
+done
+out=$(selftest)
+check "M without an argument the last agent is tested" 'Session under test: h3, profile open' echo "$out"
+out=$(selftest h2)
+check "M allied: the subagent step is expected" '14  handback-ok' echo "$out"
+check "M allied: and the report is seen passed" 'PASS  a subagent.s report was passed by the monitor' echo "$out"
+check "M allied: the network step comes after it" '15  BLOCKED by the action monitor' echo "$out"
+out=$(selftest h1)
+check "M research: the WebFetch step is expected" '14  Example Domain' echo "$out"
+out=$(selftest lead)
+check "M sealed: exactly today's tools and flags" '^Bash,Edit,Read,Write,Glob,Grep slash-off$' argv_tools
+check "M sealed: the network step is 14" '14  BLOCKED by the action monitor' echo "$out"
+check "M sealed: the neighbour probed in step 4 is a helper" '"command": "ls \.\./h\[1\]/"' sh -c "grep -h '\"step\": 4' '$STUB_DIR/selftest.calls'"
+check "M an unknown agent is refused" 'no agent h9' selftest h9
 fi
 
 finish

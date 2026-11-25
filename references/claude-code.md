@@ -13,6 +13,7 @@ Check flags and settings against your own version.
 | Merge job | Scratch worktree, path allowlist, the task's check inside bubblewrap with no network | `harness/gateway.py` (`do_mr`, `run_check`) |
 | Monitor | `PreToolUse` hook with fixed rules; auto mode's classifier, whose denials reach a `PermissionDenied` hook; both write the pause flag | `harness/hook.py`, `harness/denied.py` |
 | Keep going | `Stop` hook; a timer types a reminder into the lead's window. The hook lets agents stop once the run is done, out of time, paused or stalled (`state/STALLED`, written by the gateway) | `harness/keepgoing.py`, `harness/remind.sh` |
+| Pre-launch test | `selftest.sh [agent]` runs two short `claude -p` sessions with that agent's settings (Stop hook removed) and its profile's `--tools` and slash setting, from `profiles.py`, as `run-agent.sh` does | `harness/selftest.sh` |
 | Rejoining after a crash | `launch.sh --resume` starts every agent as a new session (`run-agent.sh <id> --resume`) with the rejoining brief from `render.py --resume`; `claude --continue` is not used | `launch.sh`, `harness/runstate.py`, `docs/*-rejoin.md` |
 | Records | Hook and gateway logs in `records/`, which the sandbox hides | `harness/offline_monitor.py` |
 | Goal contracts | A make-goal contract for `/goal` becomes the task (`task.checks`); the boss may run under `/goal` with `verify.py` as its proof | `harness/from-goal.py`, `references/goal.md` |
@@ -36,7 +37,7 @@ Check flags and settings against your own version.
   profile, although the settings allow no domain. So `hook.py` pauses the team on a non-empty
   `allowed_domains`, and on any Bash parameter but `command`, `description`, `timeout` and
   `run_in_background` (the only ones the proof runs' 1,866 recorded calls carried, besides
-  `allowed_domains`). `selftest.sh` step 14 shows it before launch.
+  `allowed_domains`). The last step of `selftest.sh` shows it before launch.
 - **`autoAllowBashIfSandboxed` is false**, so that sandboxed commands are not approved
   automatically and the agents' commands go through auto mode.
 - **Stop hooks have a cap** on consecutive blocks, according to the documentation. The
@@ -82,8 +83,8 @@ Check flags and settings against your own version.
   page fetched by the `web-fetch` subagent never reached the agent. `hook.py` now passes it,
   and records it, when the profile grants `Agent` and the call comes from inside a subagent
   (it carries `agent_id` or `agent_type`, as all 17 recorded calls did). Not yet shown live:
-  in an `allied` agent's session, ask for `the Agent tool, subagent_type general-purpose, to
-  run echo handback-ok and report the output`; the reply must arrive, and
-  `records/actions.jsonl` must hold `"tool": "SubagentHandback"` with `"decision": "pass"`.
+  `harness/selftest.sh <an allied or open agent>` step 14 asks for a subagent that runs
+  `echo handback-ok`; the reply must show `handback-ok`, and the PASS line says the monitor
+  passed the report.
 - **Headless sessions work without tmux.** Two `claude -p` sessions started at once from a
   plain shell both ran. The team has not been run that way.

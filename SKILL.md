@@ -119,9 +119,9 @@ This runs `task/install.sh`, creates the central repository from `task/seed/`, a
 ### 4. Test before launch
 
     harness/test_gateway.sh     # the board and the merge job: every line must say PASS
-    harness/selftest.sh         # the sandbox and the monitor, tried from inside one agent session
+    harness/selftest.sh [agent] # the sandbox and the monitor, tried from inside that agent's sessions (default: the last agent)
 
-`selftest.sh` prints what each of its steps should show, then the agent's table of what happened (two short sessions), then PASS or FAIL lines. Compare the table with the expectations row by row, judging by the output text. Do not launch until both tests are clean.
+`selftest.sh` prints what each of its steps should show, then the agent's table of what happened (two short sessions), then PASS or FAIL lines. The sessions are started with the agent's profile, as at launch, so run it once for an agent of each profile in use. Compare the table with the expectations row by row, judging by the output text. Do not launch until both tests are clean.
 
 ### 5. Launch
 
@@ -184,7 +184,7 @@ When the machine restarts or the tmux session dies, the run is not lost: the boa
 | Command | Does |
 |---|---|
 | `./setup.sh` | One-time setup |
-| `harness/test_gateway.sh`, `harness/selftest.sh` | Pre-launch tests; both reset what they touch |
+| `harness/test_gateway.sh`, `harness/selftest.sh [agent]` | Pre-launch tests; both reset what they touch. `selftest.sh` tests one agent's profile. |
 | `./launch.sh` | Starts the tmux session and the run clock |
 | `./launch.sh --resume` | Continues an interrupted run: same board and `main`, time down given back |
 | `harness/wait-run.sh [seconds]` | Blocks until the run completes, stalls, pauses, or times out |
