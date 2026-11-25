@@ -157,7 +157,7 @@ This sets up the work directory's Python (`tools/py`), runs `task/install.sh`, c
     ./launch.sh
     harness/boss.sh trust       # run right after launch; it waits for each agent to start
 
-A new workspace folder makes Claude Code ask whether to trust it, and the agent does not start until someone answers. `boss.sh trust` answers yes in each agent window, waits to see each session running, and reports one line per agent: `answered yes, started`, or that the session did not start. If it did not, look at that window; if the session quit, start it again there with `tmux send-keys -t '=<session>:<id>' "bash $PWD/harness/run-agent.sh <id>" Enter` and run `boss.sh trust` once more. Tell the user you did this.
+A new workspace folder makes Claude Code ask whether to trust it, and the agent does not start until someone answers. `boss.sh trust` answers yes in each agent window, waits to see each session running, and reports one line per agent, such as `[<session>] h1: answered yes, started`, or that the session did not start. If it did not, look at that window; if the session quit, start it again there with `tmux send-keys -t '=<session>:<id>' "bash $PWD/harness/run-agent.sh <id>" Enter` and run `boss.sh trust` once more. Tell the user you did this.
 
 Tell the user they can watch with `tmux attach -t <session>`. The windows are `gateway` (request log), `board` (live view of the board), one per agent, and `reminders`. Set `TEAM_REMOTE_CONTROL=1` before `./launch.sh` to start each agent with Remote Control.
 
@@ -166,9 +166,9 @@ Tell the user they can watch with `tmux attach -t <session>`. The windows are `g
 Run the wait command as a background job, so that you stay reachable and are woken when it exits:
 
     harness/wait-run.sh 540     # exits when the run completes, stalls, pauses or times out, or after 540 s
-    harness/boss.sh status      # one-line state of the run, at any time
+    harness/boss.sh status      # state of the run at any time; its first line is [<session>] <work dir>
 
-The first line `wait-run.sh` prints is `DONE`, `STALLED`, `HALT`, `TIME UP` or `STILL RUNNING`. On `STILL RUNNING`, start it again. If you run under `/goal`, each turn is one round of this step (`references/goal.md`).
+The first line `wait-run.sh` prints is `DONE [<session>]`, `STALLED [<session>]`, `HALT [<session>]`, `TIME UP [<session>]` or `STILL RUNNING [<session>]`: the state word, then the team's session name from `config.json`. On `STILL RUNNING`, start it again. If you run under `/goal`, each turn is one round of this step (`references/goal.md`).
 
 On **STALLED**, no merge was accepted for `stall_min` minutes and the run is over: go to step 7, Finish. If the limit was plainly too short for the task (a check that legitimately takes long, say), `harness/boss.sh unstall` reopens the run with a fresh stall clock; then `harness/boss.sh say all "The run is reopened. Carry on."`.
 
@@ -186,7 +186,7 @@ Paused agents do not restart by themselves; the `say` step is required. Do not c
 
 ### If the run was interrupted
 
-When the machine restarts or the tmux session dies, the run is not lost: the board, `main`, the workspaces and the clock live on disk. `harness/boss.sh status` prints a line starting `INTERRUPTED` for a run that started, is not complete and has no session; its time left and stall clock are shown as they stood at the last heartbeat, since `--resume` gives the time down back (during a pause, as they stood when it began). A plain `./launch.sh` then refuses and starts nothing. Choose one:
+When the machine restarts or the tmux session dies, the run is not lost: the board, `main`, the workspaces and the clock live on disk. `harness/boss.sh status` prints a line with `INTERRUPTED` for a run that started, is not complete and has no session; its time left and stall clock are shown as they stood at the last heartbeat, since `--resume` gives the time down back (during a pause, as they stood when it began). A plain `./launch.sh` then refuses and starts nothing. Choose one:
 
     ./launch.sh --resume        # continue it
     ./teardown.sh --archive     # or put it away as one sealed file
@@ -208,6 +208,16 @@ When the machine restarts or the tmux session dies, the run is not lost: the boa
 
 **Archive or purge.** Archive by default, and always when any work is unverified or the run did not finish: the archive keeps the work and the audit, and nothing else. A run's files left in the work directory hold a stale board that a later session can mistake for live state, so do not leave them lying around either. Purge (`./teardown.sh --purge`) only a run with nothing worth keeping, such as a trial launch, or once its result has been handed back and checked elsewhere: it deletes the repository and the records for good. A plain `./teardown.sh` stops the run and keeps every file, for when you mean to look before deciding.
 
+## Running more than one team
+
+One boss can run several teams at once. Each team is its own copy of the template.
+
+- **Give each team its own work directory and its own `session`** in that copy's `config.json`. Two teams with the same `session` would share one tmux session; `launch.sh` refuses a session name that already exists (`tmux session <session> already exists`).
+- **Call every script by absolute path**, such as `/work/team-a/harness/boss.sh status`. The shell's current directory carries over between your commands, so a relative `harness/boss.sh` acts on whichever team you last `cd`-ed into. Every script finds its own work directory from its own path, so an absolute path works from any directory.
+- **Run one `wait-run.sh` per team**, each as its own background job: `/work/team-a/harness/wait-run.sh 540` and `/work/team-b/harness/wait-run.sh 540`. Each one watches only its own team.
+- **Check the `[<session>]` tag** on what `boss.sh` and `wait-run.sh` print before you act on it. `wait-run.sh` prints it on its first line (`HALT [team-b]`); every line `boss.sh` prints by itself starts with it (`[team-b] typed into h1: ...`, `[team-b] refused: ...`); `boss.sh status` starts with `[<session>] <absolute path of the work directory>`. Output that `boss.sh` passes through from other programs (the board view, the HALT record, the message list) carries no tag, so read it under the tag line above it. A HALT in one team pauses only that team: review it and resume with that team's `boss.sh`.
+- **What teams still share:** one Claude Code login and its rate limits, and the machine's CPU, memory and disk. Several teams make each one slower and reach the rate limits sooner, so size the budgets (`budget_min`, `stall_min`) for that, and start fewer agents per team if needed.
+
 ## Commands
 
 | Command | Does |
@@ -216,8 +226,8 @@ When the machine restarts or the tmux session dies, the run is not lost: the boa
 | `harness/test_gateway.sh`, `harness/selftest.sh [agent]` | Pre-launch tests; both reset what they touch. `selftest.sh` tests one agent's profile. |
 | `./launch.sh` | Starts the tmux session and the run clock |
 | `./launch.sh --resume` | Continues an interrupted run: same board and `main`, time down given back |
-| `harness/wait-run.sh [seconds]` | Blocks until the run completes, stalls, pauses, or times out |
-| `harness/boss.sh status / trust / say <id or all> "<text>" / slash <id> "/<command>" / messages / resume / unstall / remove <id> / end` | The boss's controls. `messages` prints every message the agents sent each other; `slash` types a slash command into an `open` agent's window; `unstall` reopens a stalled run. |
+| `harness/wait-run.sh [seconds]` | Blocks until the run completes, stalls, pauses, or times out. First line: the state word and the session, e.g. `DONE [<session>]` |
+| `harness/boss.sh status / trust / say <id or all> "<text>" / slash <id> "/<command>" / messages / resume / unstall / remove <id> / end` | The boss's controls. `messages` prints every message the agents sent each other; `slash` types a slash command into an `open` agent's window; `unstall` reopens a stalled run. Every line it prints by itself starts with `[<session>] ` (`say` prints `[<session>] typed into <id>: <text>`); `status` starts with `[<session>] <work dir>`. |
 | `harness/py harness/verify.py` | Checks every statement on a fresh checkout of `main` |
 | `harness/py harness/from-goal.py <contract> [--apply --allowed <regex> ...]` | Turns a make-goal contract into the task, before `setup.sh` |
 | `harness/py harness/offline_monitor.py` | Summary of the run's records |
