@@ -104,5 +104,8 @@ check "a refused message is logged with its recipient" '"op": "msg", "detail": "
 out=$(cd "$W" && harness/boss.sh messages)
 check "boss.sh messages shows sender and recipient" 'h1 -> h2: first' echo "$out"
 check "boss.sh messages counts them" '\([0-9]+ messages\)' echo "$out"
+for a in lead h1; do
+  check "a rejoining $a is told to read its messages" 'team inbox --all' sh -c "cd '$W' && python3 harness/render.py $a --resume"
+done
 check "the board window lists the messages table" 'messages \(' sh -c "cd '$W' && python3 harness/board.py --brief"
 finish

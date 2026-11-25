@@ -7,6 +7,7 @@ Find your place before you change anything:
     team status
     git status; git log --oneline -5; git stash list
     team sql "SELECT * FROM announce"
+    team inbox --all
 
-Read all of `announce`: the lead's orders give the table layouts and the working loop. Then look in `assign` for your crew, and find what you held: your claims in the to-do table and your own latest notes (rows whose owner or author is `{ID}`). Finish a claim you can, or release it as the orders say. A file you were editing may be half done: run the check before you commit it. Then go on with the loop in the orders. If the lead has not yet posted that the run resumed, carry on anyway; re-read `announce` from time to time.
+Read all of `announce`: the lead's orders give the table layouts and the working loop. Then look in `assign` for your crew, and find what you held: your claims in the to-do table and your own latest notes (rows whose owner or author is `{ID}`). `team inbox --all` shows every message to or from you, including questions you had not answered and answers you had not read before the interruption. Finish a claim you can, or release it as the orders say. A file you were editing may be half done: run the check before you commit it. Then go on with the loop in the orders. If the lead has not yet posted that the run resumed, carry on anyway; re-read `announce` from time to time.
 
