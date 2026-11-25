@@ -7,6 +7,8 @@ outside its own workspace (the shell sandbox and the action-monitor hook forbid 
 Relays:  sql    -> the shared SQLite board; me() returns the caller's identity
          push   -> central.git refs/heads/agent/<id>   (own branch only)
          mr     -> merge job: lands on main only if the task's check accepts it
+         msg    -> a message to one agent or to all, stored in the board's `messages` table
+         inbox  -> the caller's messages; unread ones are marked read
 Every request is appended to records/gateway.jsonl. Standard library only.
 """
 import fcntl
@@ -97,6 +99,27 @@ LEAD_ONLY = {A.SQLITE_DELETE, A.SQLITE_ALTER_TABLE, A.SQLITE_REINDEX, A.SQLITE_A
              A.SQLITE_DROP_TEMP_TRIGGER, A.SQLITE_DROP_TEMP_VIEW, A.SQLITE_DROP_VTABLE}
 NOBODY = {A.SQLITE_ATTACH, A.SQLITE_DETACH, A.SQLITE_TRANSACTION, A.SQLITE_SAVEPOINT}
 READ_PRAGMAS = {"table_info", "table_xinfo", "table_list", "index_list", "index_info", "foreign_key_list"}
+# Tables only the gateway writes. Everyone may read them; nobody, the lead included, may write,
+# alter, drop, index or put a trigger on them through `team sql`.
+GATEWAY_TABLES = {"messages", "message_reads"}
+GATEWAY_WRITES = {A.SQLITE_INSERT: 0, A.SQLITE_UPDATE: 0, A.SQLITE_DELETE: 0, A.SQLITE_DROP_TABLE: 0,
+                  A.SQLITE_ALTER_TABLE: 1, A.SQLITE_CREATE_TRIGGER: 1, A.SQLITE_CREATE_TEMP_TRIGGER: 1,
+                  A.SQLITE_DROP_TRIGGER: 1, A.SQLITE_DROP_TEMP_TRIGGER: 1, A.SQLITE_CREATE_INDEX: 1,
+                  A.SQLITE_CREATE_TEMP_INDEX: 1, A.SQLITE_DROP_INDEX: 1, A.SQLITE_DROP_TEMP_INDEX: 1}
+MESSAGES_SCHEMA = """
+CREATE TABLE IF NOT EXISTS messages (
+  id INTEGER PRIMARY KEY,
+  ts TEXT NOT NULL DEFAULT (datetime('now')),
+  sender TEXT NOT NULL,
+  recipient TEXT NOT NULL,          -- an agent's name, or 'all'
+  body TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS message_reads (
+  agent TEXT PRIMARY KEY,
+  last_id INTEGER NOT NULL DEFAULT 0  -- the agent has read every message to it up to this id
+);
+"""
+MSG_MAX = 4000
 
 
 def split_sql(q):
@@ -135,6 +158,8 @@ class Board:
             return A.SQLITE_DENY
         if action == A.SQLITE_PRAGMA:
             return A.SQLITE_OK if arg1 in READ_PRAGMAS else A.SQLITE_DENY
+        if action in GATEWAY_WRITES and str((arg1, arg2)[GATEWAY_WRITES[action]]).lower() in GATEWAY_TABLES:
+            return A.SQLITE_DENY
         if action in LEAD_ONLY and self.agent != "lead":
             return A.SQLITE_DENY
         return A.SQLITE_OK
@@ -145,6 +170,64 @@ class Board:
             self.conn.execute(sql)
         finally:
             self.internal = False
+
+    def own_tx(self, fn):
+        """Run fn() as one gateway-owned transaction (the authorizer lets it through)."""
+        self.internal = True
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                out = fn()
+                self.conn.execute("COMMIT")
+                return out
+            except BaseException:
+                try:
+                    self.conn.execute("ROLLBACK")
+                except sqlite3.Error:
+                    pass
+                raise
+        finally:
+            self.internal = False
+
+    # ------------------------------------------------------------ messages
+    def mine(self, unread_only):
+        """Messages to this agent (or to all, from someone else). With unread_only, those after
+        the agent's read mark. Returns rows (id, ts, sender, recipient, body)."""
+        after = 0
+        if unread_only:
+            r = self.conn.execute("SELECT last_id FROM main.message_reads WHERE agent = ?", (self.agent,)).fetchone()
+            after = r[0] if r else 0
+        return self.conn.execute(
+            "SELECT id, ts, sender, recipient, body FROM main.messages WHERE id > ? AND "
+            "(recipient = ? OR (recipient = 'all' AND sender != ?)%s) ORDER BY id"
+            % ("" if unread_only else " OR sender = ?"),
+            (after, self.agent, self.agent) + (() if unread_only else (self.agent,))).fetchall()
+
+    def unread(self):
+        self.internal = True
+        try:
+            return len(self.mine(True))
+        except sqlite3.Error:
+            return 0
+        finally:
+            self.internal = False
+
+    def send(self, to, body):
+        def ins():
+            return self.conn.execute("INSERT INTO main.messages(sender, recipient, body) VALUES (?, ?, ?)",
+                                     (self.agent, to, body)).lastrowid
+        return self.own_tx(ins)
+
+    def inbox(self, everything):
+        def read():
+            rows = self.mine(not everything)
+            unread = self.mine(True)
+            if unread:
+                self.conn.execute("INSERT INTO main.message_reads(agent, last_id) VALUES (?, ?) ON CONFLICT(agent) "
+                                  "DO UPDATE SET last_id = max(last_id, excluded.last_id)",
+                                  (self.agent, unread[-1][0]))
+            return rows
+        return self.own_tx(read)
 
     def run(self, q):
         stmts = split_sql(q)
@@ -176,7 +259,8 @@ class Board:
             elif "not authorized" in msg or "authorization denied" in msg:
                 msg = ("not allowed. Helpers may SELECT, INSERT and UPDATE; only the lead may create, alter, drop "
                        "or delete. Nobody may ATTACH, use PRAGMA to change settings, or write BEGIN/COMMIT: each "
-                       "request already runs as one transaction.")
+                       "request already runs as one transaction. The messages and message_reads tables are "
+                       "read-only for everyone: send with `team msg`, read with `team inbox`.")
             elif "full" in msg:
                 msg = "the board is at its size limit; writes are refused"
             out = ["ERROR: " + msg]
@@ -312,6 +396,45 @@ def do_mr(agent, title):
             git("worktree", "prune", cwd=CENTRAL)
 
 
+# ----------------------------------------------------------------- messages
+def do_msg(agent, board, to, body):
+    """Store one message. The sender is the spool the request came in by, never the request."""
+    detail = "to %s: %s" % (to, body)
+    body = body.strip()
+    if to != "all" and to not in AGENTS:
+        return 2, "unknown recipient %r: send to one of %s, or to all" % (to, ", ".join(AGENTS)), detail
+    if to == agent:
+        return 2, "that is you: a message goes to another agent, or to all", detail
+    if not body:
+        return 2, "empty message", detail
+    if len(body) > MSG_MAX:
+        return 2, ("message too long (%d characters, at most %d): put long text in a board table and send a "
+                   "pointer to it" % (len(body), MSG_MAX)), detail
+    try:
+        mid = board.send(to, body)
+    except sqlite3.Error as e:
+        return 1, "ERROR: message not sent: %s" % e, detail
+    out = "sent message %d to %s" % (mid, to)
+    if to != "all" and os.path.exists("%s/removed/%s" % (STATE, to)):
+        out += "\nNOTE: %s has been removed from the team and will not read it." % to
+    return 0, out, detail
+
+
+def do_inbox(board, everything):
+    try:
+        rows = board.inbox(everything)
+    except sqlite3.Error as e:
+        return 1, "ERROR: %s" % e, "inbox"
+    if not rows:
+        return 0, ("no messages to or from you yet" if everything else "no unread messages"), "inbox"
+    out = ["#%d %s UTC  %s -> %s:\n  %s" % (i, ts, snd, rcp, body.replace("\n", "\n  "))
+           for i, ts, snd, rcp, body in rows]
+    if not everything:
+        out.append("(%d message%s, now marked read; team inbox --all shows every message to or from you)"
+                   % (len(rows), "" if len(rows) == 1 else "s"))
+    return 0, "\n".join(out)[-20000:], "inbox --all" if everything else "inbox"
+
+
 # -------------------------------------------------------------------- watch
 def beat():
     """Write the time of this beat to state/heartbeat. After a crash, launch.sh --resume reads it
@@ -344,10 +467,15 @@ def handle(agent, board, req):
     if op == "whoami":
         return 0, agent, op
     if op == "status":
-        return 0, status_text(agent), op
+        n = board.unread()
+        return 0, status_text(agent) + ("\nunread messages: %d (read them: team inbox)" % n if n else ""), op
+    if op == "inbox":
+        return do_inbox(board, bool(req.get("all")))
     left = time_left()
-    if left is not None and left <= 0 and op in ("sql", "push", "mr"):
+    if left is not None and left <= 0 and op in ("sql", "push", "mr", "msg"):
         return 3, "TIME IS UP: the run has ended. Stop working.", op
+    if op == "msg":
+        return do_msg(agent, board, str(req.get("to", "")), str(req.get("body", "")))
     if op == "sql":
         q = str(req.get("sql", ""))
         code, out = board.run(q)
@@ -423,6 +551,7 @@ if __name__ == "__main__":
     # was never answered.
     _init = sqlite3.connect(DBFILE, timeout=10)
     _init.execute("PRAGMA journal_mode = WAL")
+    _init.executescript(MESSAGES_SCHEMA)      # the gateway's own tables; kept across restarts
     _init.close()
     print("gateway up for agents:", " ".join(AGENTS), flush=True)
     for a in AGENTS:

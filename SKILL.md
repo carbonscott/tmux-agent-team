@@ -17,7 +17,7 @@ You are the **boss**. You set the team up, start it, watch it, and check the res
 How the team works:
 
 - Each agent runs in its own tmux window, in its own sandboxed workspace (a Git clone on its own branch).
-- Agents never message each other. They share a board (a SQL database) and a Git repository, both reached through one command, `team`.
+- Agents coordinate only through a shared board (a SQL database) and a Git repository, both reached through one command, `team`. There are no private messages: everything one agent tells another is on the board, where every agent and the boss can read it, and where it survives a restart. A quick question to one peer goes through the gateway as a message (`team msg`), stored on the board and logged under its true sender.
 - Work counts only when the merge job accepts it onto `main`, and the merge job runs your check.
 - A monitor looks at every command before it runs. A violation pauses the whole team until you have reviewed it.
 - Nobody stops until every statement is done or time runs out.
@@ -122,12 +122,14 @@ If it returns **HALT**, the monitor blocked something and the whole team is paus
 | A real violation by a helper | `harness/boss.sh remove <id>`, then resume and tell the others as above |
 | A real violation by the lead | `harness/boss.sh end` |
 
+Agents can send each other messages: `team msg <agent|all> "<text>"` stores one in the board's table `messages`, `team inbox` reads it, and `team status` shows `unread messages: <n>` to the recipient. The gateway sets the sender, refuses unknown recipients, removed senders and anything sent during a pause, and nobody can change the table through `team sql`. `harness/boss.sh messages` shows them all. Your own `say` messages are typed into a window instead and are not stored there.
+
 Paused agents do not restart by themselves; the `say` step is required. Do not coach the team: your messages carry facts about the run (time, a pause cleared, a removal), never hints about the work.
 
 ### 7. Finish
 
 1. **Check the result yourself:** `python3 harness/verify.py`. It clones `main` into a fresh directory, runs the check for every statement, and confirms the frozen files are unchanged. Every line must say PASS.
-2. **Review the records:** `python3 harness/offline_monitor.py`. It lists every blocked or refused action, every failed board request and every rejected merge. Failed reads of `announce` at the very start are helpers arriving before the lead; they are harmless.
+2. **Review the records:** `python3 harness/offline_monitor.py`. It lists every blocked or refused action, every failed board request and every rejected merge. Failed reads of `announce` at the very start are helpers arriving before the lead; they are harmless. `harness/boss.sh messages` prints what the agents said to each other with `team msg`; read it for pressure, coaching or work done outside the board.
 3. **Hand back the result.** It is the `main` branch of `<work dir>/central.git`.
 4. **Stop the team and put the run away:** `./teardown.sh --archive [DIR]`. It stops everything, runs `verify.py` once more, writes one sealed file `team-archive-<session>-<YYYYmmdd>-<HHMMSS>.tar.gz` into DIR (default: the folder that holds the work directory), deletes the run's files from the work directory, and prints `archived: <full path>` as its last line. The file holds only `central.git` (the result: `git clone central.git <dir>`), `records/` and `STATUS.txt`, whose first line says what the run came to, for example `abandoned run, stopped 2026-11-25 14:41:07 UTC, 4 of 7 done, not verified`. It deletes nothing unless the file was written and read back. Its output says "nothing from this run is still running" once every agent session has exited. Agents stop by themselves within a minute or two of the finish, so there is no need to wait for them first.
 5. **Report to the user:** whether every statement is done and how you checked, each pause and what you decided, each prompt you answered for them, and anything still running.
@@ -142,12 +144,12 @@ Paused agents do not restart by themselves; the `say` step is required. Do not c
 | `harness/test_gateway.sh`, `harness/selftest.sh` | Pre-launch tests; both reset what they touch |
 | `./launch.sh` | Starts the tmux session and the run clock |
 | `harness/wait-run.sh [seconds]` | Blocks until the run completes, pauses, or times out |
-| `harness/boss.sh status / trust / say <id or all> "<text>" / resume / remove <id> / end` | The boss's controls |
+| `harness/boss.sh status / trust / say <id or all> "<text>" / messages / resume / remove <id> / end` | The boss's controls. `messages` prints every message the agents sent each other. |
 | `python3 harness/verify.py` | Checks every statement on a fresh checkout of `main` |
 | `python3 harness/offline_monitor.py` | Summary of the run's records |
 | `./teardown.sh [--archive [DIR] \| --purge]` | Stops the session and the gateway; `--archive` seals the repository and records into one dated file in DIR and then deletes the run's files; `--purge` deletes them without keeping anything |
 | `python3 harness/profiles.py [--list / --check / <agent>]` | Each agent's profile; `--check` validates `config.json` |
-| `team help` | What agents can do: `whoami`, `status`, `sql`, `push`, `mr`, `wait` |
+| `team help` | What agents can do: `whoami`, `status`, `sql`, `push`, `mr`, `wait`, `msg`, `inbox` |
 
 ## If something goes wrong
 

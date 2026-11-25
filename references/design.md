@@ -15,7 +15,7 @@ has no size limit. The template has been run with four agents.
 
 | # | Rule | Why |
 |---|---|---|
-| 1 | **A board instead of messages.** Agents share a database and a Git repository and nothing else. Five tables: `announce` (orders), `assign` (who is on what), `notes` (plans and progress), `subtasks` (the to-do list), `landed` (finished work). Claiming a task is one atomic update. | A board survives an agent dying, makes nobody wait for a reply, can be read by a latecomer, and is a full record afterwards. |
+| 1 | **A board instead of private messages.** Agents share a database and a Git repository and nothing else. Five tables: `announce` (orders), `assign` (who is on what), `notes` (plans and progress), `subtasks` (the to-do list), `landed` (finished work). Claiming a task is one atomic update. A directed message (`team msg`) is a row in a sixth table, `messages`, that only the gateway writes. | A board survives an agent dying, makes nobody wait for a reply, can be read by a latecomer, and is a full record afterwards. Messages give a quick question to one peer without a private channel: every agent and the boss can read them. |
 | 2 | **A fixed finish line that a machine checks.** The goal is split into statements. Work counts only when the merge job accepts it onto `main`: it merges the branch, refuses changes outside the allowed paths, runs the check where agents cannot reach, then moves `main`. | Agents report success optimistically, and nobody can read every diff. The merge job turns "done" from a claim into a fact. |
 | 3 | **Identity comes from the channel.** Who sent a request is decided by where it arrived, never by a name the agent writes. | Records can be attributed, a claim means something, and orders can be told from notes. |
 | 4 | **One door out.** One command (`team`) for everything shared, served by a gateway outside the agents' reach that stamps identity, enforces limits and logs. | One place to enforce, one place to log. |
@@ -50,6 +50,7 @@ orders are, which keeps the briefs short and shows that the board carries everyt
 | Pause on a rule violation | Enforced by the hook (tested) |
 | Pause when the model classifier denies an action | Built, never triggered in a run |
 | Paths given to the file tools (Read, Edit, Write, Glob, Grep) | Checked by fixed rules in `hook.py` only; never exercised, since agents used the shell |
+| Messages (`team msg`, `team inbox`) | Enforced by the gateway (tested with stubs, not yet in a real run): the sender is the spool the request came in by; unknown recipients, removed senders, a pause and the end of the time are refused; `messages` and `message_reads` refuse every write, trigger, index, alter and drop through `team sql`, the lead's included. That an agent reads its inbox when `team status` says `unread messages` is only requested. |
 | Authorship of board rows | A helper's rows default to its own name, and every request is logged under the true sender. A helper can still type another name into a column; the log shows who really wrote it. |
 | Removing a helper | The gateway and monitor refuse it. Reopening its tasks is left to the lead. Never exercised. |
 | Agents isolated from the boss's account | Not enforced. All sessions run as one OS user with one login. The sandbox confines their shell commands; the agent processes themselves are outside it. |

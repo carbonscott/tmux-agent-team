@@ -18,6 +18,17 @@ def show(db, title, sql):
         print("   (%s)" % e)
 
 
+if "--messages" in sys.argv:      # boss.sh messages: every message, oldest first
+    try:
+        db = sqlite3.connect("file:%s/state/board.db?mode=ro" % R, uri=True)
+        rows = db.execute("SELECT id, ts, sender, recipient, body FROM messages ORDER BY id").fetchall()
+    except sqlite3.Error:
+        rows = []
+    for i, ts, snd, rcp, body in rows:
+        print("#%d %s UTC  %s -> %s: %s" % (i, ts, snd, rcp, body.replace("\n", "\n    ")))
+    print("(%d message%s)" % (len(rows), "" if len(rows) == 1 else "s"))
+    sys.exit(0)
+
 try:
     left = int((float(open(R + "/state/deadline").read()) - time.time()) // 60)
 except OSError:

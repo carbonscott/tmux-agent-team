@@ -18,6 +18,12 @@ USAGE = """usage:
   team push                   publish your committed HEAD to branch agent/<you>
   team mr "<title>"           push, then ask the merge job to land it on main
   team wait <seconds>         sleep (max 110), then print status
+  team msg <agent|all> "<text>"   send a message to one agent, or to all; text - reads stdin
+  team inbox [--all]          print your unread messages and mark them read (--all: every
+                              message to or from you). `team status` shows how many are unread.
+
+Messages are not private: they are stored on the board (table `messages`), where every
+agent and the boss can read them. Orders, claims and plans still belong in the board's tables.
 """
 
 
@@ -79,6 +85,17 @@ def main(argv):
         return call("push", 60)
     if cmd == "mr":
         return call("mr", 400, title=" ".join(args) or "(no title)")
+    if cmd == "msg":
+        if len(args) < 2:
+            print('usage: team msg <agent|all> "<text>"', file=sys.stderr)
+            return 2
+        body = sys.stdin.read() if args[1:] == ["-"] else " ".join(args[1:])
+        return call("msg", 20, to=args[0], body=body)
+    if cmd == "inbox":
+        if args not in ([], ["--all"]):
+            print("usage: team inbox [--all]", file=sys.stderr)
+            return 2
+        return call("inbox", 20, all=bool(args))
     if cmd == "wait":
         n = max(1, min(110, int(float(args[0])) if args else 30))
         time.sleep(n)

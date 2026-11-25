@@ -3,6 +3,7 @@
 #   boss.sh status              run state, and the blocked action if the team is paused
 #   boss.sh trust               answer "yes" to the workspace trust prompt in every agent window (waits for it)
 #   boss.sh say <id|all> "..."  type a message into an agent's window
+#   boss.sh messages            every message the agents sent each other (team msg), oldest first
 #   boss.sh resume              clear a reviewed pause and give the lost time back
 #   boss.sh remove <id>         remove a helper: the gateway and the monitor refuse it from now on
 #   boss.sh end                 end the run now
@@ -27,6 +28,7 @@ case "${1:-status}" in
             [ -z "${todo// /}" ] && break; sleep 1
           done
           [ -n "${todo// /}" ] && echo "still starting, run again:$todo";;
+  messages) python3 "$R/harness/board.py" --messages;;
   say)    if [ "$2" = all ]; then for a in $(cfg agents); do say "$a" "$3"; done; else say "$2" "$3"; fi;;
   resume) python3 -c "
 import json,time
@@ -36,5 +38,5 @@ open('$R/state/deadline','w').write(str(d+time.time()-h['ts']))" &&
           echo "pause cleared. Agents that stopped will not restart by themselves: boss.sh say all \"...\"";;
   remove) touch "$R/state/removed/$2" && echo "$2 removed. Ask the lead to reopen its tasks.";;
   end)    python3 -c "import time;open('$R/state/deadline','w').write(str(time.time()))"; echo "run ended";;
-  *)      sed -n 2,9p "$0";;
+  *)      sed -n 2,10p "$0";;
 esac
