@@ -16,6 +16,9 @@ say() { tmux send-keys -t "=$S:$1" -l "[boss] $2"; sleep 0.5; tmux send-keys -t 
 case "${1:-status}" in
   status) "$R/harness/py" "$R/harness/board.py" --brief
           echo "profiles: $("$R/harness/py" "$R/harness/profiles.py" --list)"
+          "$R/harness/py" -c 'import json, sys
+if json.load(open(sys.argv[1])).get("sandbox", True) is False:
+    print("== UNWALLED run: the shell sandbox is off (config.json \"sandbox\": false); the walls are only requested")' "$R/config.json"
           st=$("$R/harness/py" "$R/harness/runstate.py"); case "$st" in INTERRUPTED*|ended*) echo "== $st";; esac
           [ -e "$R/state/HALT" ] && { echo "blocked action:"; "$R/harness/py" -m json.tool "$R/state/HALT"; }; true;;
   trust)  # waits up to 30 s: for each prompt to appear (so it can be run right after launch), and,

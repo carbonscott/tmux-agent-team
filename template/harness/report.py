@@ -115,6 +115,7 @@ def live_facts(root, stopped=None):
     rdir = st + "/removed"
     f = dict(session=cfg.get("session"), agents=cfg["agents"], statements=cfg["task"]["statements"],
              budget_min=cfg.get("budget_min"), stall_min=cfg.get("stall_min"),
+             sandbox=cfg.get("sandbox", True) is not False,     # False: an unwalled run
              profiles={a: (cfg.get("agent_profiles") or {}).get(a) or cfg.get("profile") or "sealed"
                        for a in cfg["agents"]},
              started=num(st + "/started"), deadline=num(st + "/deadline"), done_at=num(st + "/DONE"),
@@ -164,6 +165,7 @@ def status_facts(rec):
     budget = re.match(r"([0-9.]+)", kv.get("budget", ""))
     f = dict(session=kv.get("session"), agents=words("agents"), statements=words("statements"),
              budget_min=float(budget.group(1)) if budget else None, stall_min=None, profiles={},
+             sandbox=not kv.get("sandbox", "on").startswith("off"),
              started=when(kv.get("started")), done_at=when(kv.get("finished at")) if "DONE" in flags else None,
              heartbeat=None, landed=words("done on main"), stalled=None, halt=None,
              removed=[[None, a] for a in words("removed helpers")], version=0, stopped=when(kv.get("stopped")),
@@ -544,6 +546,7 @@ def page(g):
     facts = [("done", "%d of %d" % (n, m)), ("state", state),
              ("running time", span(run_s) + (" of %s min" % budget if budget else ""))]
     facts += [("clock stopped", stopped)] if stopped else []
+    facts += [("sandbox", "off: an unwalled run")] if F.get("sandbox") is False else []
     facts += [("merges", "%d accepted, %d rejected" % (len(g["merges"]), len(g["rejected"]))),
               ("tool calls", str(len(g["acts"]))), ("pauses", str(len(g["pauses"]))),
               ("removals", str(len(g["removed"]))), ("resumes", str(len(g["resumes"]))),
@@ -556,7 +559,7 @@ def page(g):
 <div class="bar"><i style="width:%(w).1f%%"></i></div>
 <ul class="chips">%(chips)s</ul>
 <dl class="facts">%(facts)s</dl>
-%(source)s%(events)s
+%(unwalled)s%(source)s%(events)s
 <section><h2>Timeline</h2>%(tl)s</section>
 <section><h2>Accepted merges</h2>%(merges)s</section>
 <section><h2>Rejected merge requests</h2>%(rej)s</section>
@@ -575,6 +578,10 @@ msgs: sent / received.</p></section>
         agents=len(AGENTS), tone=tone, n=n, m=m, state=e(state), w=100.0 * n / max(1, m), chips=chips,
         facts="".join("<div><dt>%s</dt><dd>%s</dd></div>" % (e(k), e(v)) for k, v in facts),
         events='<ul class="events">%s</ul>' % "".join(events) if events else "",
+        unwalled='<p class="events"><b>UNWALLED RUN</b>: the shell sandbox was off (config.json "sandbox": false). '
+                 'The agents\' shells could reach the network, the home directory and the run\'s own files; the '
+                 'walls were requests that the monitor checked call by call, not enforced. Read the records with '
+                 'that in mind.</p>\n' if F.get("sandbox") is False else "",
         source='<p class="muted">The run\'s facts come from %s.</p>\n' % e(F["source"]) if F.get("source") else "",
         tl=timeline(g),
         merges=table(["time", "since start", "agent", "title", "made done", "files"], merges, "No merge accepted yet.",
