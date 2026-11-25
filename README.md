@@ -31,6 +31,10 @@ The skill activates only when invoked by name.
     harness/py harness/verify.py     # afterwards: check the result on a fresh checkout
     ./teardown.sh --archive       # stop; keep the repository and records in one dated file; clean up
 
+To run more than one team at once, give each its own copy of `template/` and its own `session` in
+`config.json`, and call each team's scripts by absolute path. `boss.sh` and `wait-run.sh` tag what
+they print with `[<session>]`, so you can tell the teams apart (`SKILL.md`, "Running more than one team").
+
 The example task is a seven-module Python package whose frozen tests are the statements.
 Four agents finish it in about two minutes.
 
