@@ -9,6 +9,8 @@ S=$(cfg session); MODE=${1:-}
 case "$MODE" in ""|--resume) ;; *) echo "usage: ./launch.sh [--resume]"; exit 2;; esac
 tmux has-session -t "=$S" 2>/dev/null && { echo "tmux session $S already exists"; exit 1; }
 [ -d "$R/ws" ] || { echo "run ./setup.sh first"; exit 1; }
+# config.json may have changed since setup (before a resume, say): check it again
+"$R/harness/py" "$R/harness/profiles.py" --check || { echo "fix profile / agent_profiles / sandbox in config.json. Nothing was started."; exit 1; }
 STATE=$("$R/harness/py" "$R/harness/runstate.py")
 if [ -z "$MODE" ]; then
   case "$STATE" in

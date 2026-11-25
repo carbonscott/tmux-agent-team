@@ -29,6 +29,14 @@ setcfg sandbox true; out=$( cd "$W" && harness/py harness/mk_settings.py 2>&1 )
 check "true turns it back on" '^True$' enabled h1
 refute "and then mk_settings.py says nothing about the sandbox being off" -i "$WARN" echo "$out"
 
+# ---- launch.sh checks the value again: config.json may change after setup
+setcfg sandbox '"off"'
+out=$(launch 2>&1); rc=$?
+[ $rc -ne 0 ] && ok "launch.sh refuses a sandbox value written after setup" || no "launch.sh refuses a sandbox value written after setup" "$out"
+check "and says which setting" 'sandbox' echo "$out"
+[ ! -e "$STUB_DIR/session" ] && ok "and starts nothing" || no "and starts nothing"
+setcfg sandbox true
+
 # ---- a walled run never mentions it
 mk_workdir lead h1
 setup_wd
