@@ -157,7 +157,7 @@ Paused agents do not restart by themselves; the `say` step is required. Do not c
 
 ### If the run was interrupted
 
-When the machine restarts or the tmux session dies, the run is not lost: the board, `main`, the workspaces and the clock live on disk. `harness/boss.sh status` prints a line starting `INTERRUPTED` for a run that started, is not complete and has no session. A plain `./launch.sh` then refuses and starts nothing. Choose one:
+When the machine restarts or the tmux session dies, the run is not lost: the board, `main`, the workspaces and the clock live on disk. `harness/boss.sh status` prints a line starting `INTERRUPTED` for a run that started, is not complete and has no session; its time left and stall clock are shown as they stood at the last heartbeat, since `--resume` gives the time down back (during a pause, as they stood when it began). A plain `./launch.sh` then refuses and starts nothing. Choose one:
 
     ./launch.sh --resume        # continue it
     ./teardown.sh --archive     # or put it away as one sealed file

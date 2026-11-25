@@ -296,4 +296,33 @@ check "F the refusal moves no clock" "^$D0\$" cat "$W/state/deadline"
 kill -CONT $GWPID; stop_gateway
 fi
 
+# ---- G: while a run is down or paused, boss.sh status shows the clocks as they stopped
+if want G; then
+mk_workdir lead h1; setcfg stall_min 30; setup_wd; launch >/dev/null 2>&1; start_gateway
+wait_for 8 test -s "$W/state/heartbeat"
+stop_gateway; rm -f "$STUB_DIR/session"      # the crash
+python3 -c "
+import time; now = time.time()
+open('$W/state/heartbeat', 'w').write(str(now - 600))      # down for ten minutes
+open('$W/state/deadline', 'w').write(str(now + 300))       # 5 min left now, 15 at the last beat
+open('$W/state/stall_from', 'w').write(str(now - 660))     # 1 min without a merge at the last beat, 11 now"
+out=$(cd "$W" && harness/boss.sh status)
+check "G INTERRUPTED: time left is shown as at the last heartbeat" 'time left: 1[45] min' echo "$out"
+check "G with a note that --resume gives the time down back" 'time left: [0-9]+ min \(as at the last heartbeat .*launch\.sh --resume' echo "$out"
+check "G the stall clock is frozen too" 'stall clock: 1 of 30 min.*\(stopped' echo "$out"
+check "G the run is still reported as interrupted" 'INTERRUPTED' echo "$out"
+# a live run that is paused: the clocks stop at the start of the pause
+: > "$STUB_DIR/session"; python3 -c "
+import json, time; now = time.time()
+open('$W/state/heartbeat', 'w').write(str(now)); open('$W/state/deadline', 'w').write(str(now + 300))
+open('$W/state/stall_from', 'w').write(str(now - 360))
+json.dump(dict(ts=now - 300, agent='h1', reason='test'), open('$W/state/HALT', 'w'))"
+out=$(cd "$W" && harness/boss.sh status)
+check "G paused: time left is shown as at the start of the pause" 'time left: (9|10) min \(as at the start of the pause' echo "$out"
+check "G paused: the stall clock stops at the pause" 'stall clock: 1 of 30 min' echo "$out"
+rm -f "$W/state/HALT"
+out=$(cd "$W" && harness/boss.sh status)
+check "G a live run shows the live clock, with no note" 'time left: [45] min  done on main' echo "$out"
+fi
+
 finish

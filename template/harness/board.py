@@ -37,9 +37,35 @@ if "--messages" in sys.argv:      # boss.sh messages: every message, oldest firs
     print("(%d message%s)" % (len(rows), "" if len(rows) == 1 else "s"))
     sys.exit(0)
 
+
+
+def stopped_at():
+    """(when, why) the run's clocks stopped, or None while they run: the start of a pause in
+    progress, or the last heartbeat of a run that is down. Both are given back to the deadline
+    and the stall clock later, so the boss is shown the value as it stood then."""
+    marks = []
+    try:
+        marks.append((float(json.load(open(R + "/state/HALT"))["ts"]),
+                      "as at the start of the pause %s; boss.sh resume gives the paused time back"))
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    if os.path.exists(R + "/state/started") and not os.path.exists(R + "/state/DONE"):
+        sys.path.insert(0, R + "/harness")
+        import runstate
+        if runstate.classify()[0] == "INTERRUPTED" and runstate.last_beat()[0]:
+            marks.append((runstate.last_beat()[0], "as at the last heartbeat %s; the run is down, and "
+                          "./launch.sh --resume gives the time down back"))
+    if not marks:
+        return None
+    t, why = min(marks)
+    return t, why % time.strftime("%H:%M:%S", time.localtime(t))
+
+
+stop = stopped_at()
+now = stop[0] if stop else time.time()
 try:
-    left = int((float(open(R + "/state/deadline").read()) - time.time()) // 60)
-except OSError:
+    left = int((float(open(R + "/state/deadline").read()) - now) // 60)
+except (OSError, ValueError):
     left = "?"
 try:
     done = " ".join(json.load(open(R + "/state/landed.json")))
@@ -53,16 +79,17 @@ if os.path.exists(R + "/state/DONE"):
     print("== RUN COMPLETE in %.1f min%s  done on main: %s" % (run / 60, " (clock stopped: paused %.1f min, down %.1f min)"
                                                                % (paused / 60, down / 60) if paused or down else "", done or "-"))
 else:
-    print("== %s  time left: %s min  done on main: %s" % (time.strftime("%H:%M:%S"), left, done or "-"))
+    print("== %s  time left: %s min%s  done on main: %s" % (time.strftime("%H:%M:%S"), left,
+                                                         " (%s)" % stop[1] if stop else "", done or "-"))
 stall_min = json.load(open(R + "/config.json")).get("stall_min") or 0
 if os.path.exists(R + "/state/STALLED"):
     print("== STALLED: no merge was accepted for %s min (stall_min). The run is over; what landed stays on main."
           % stall_min)
 elif stall_min and not os.path.exists(R + "/state/DONE"):
     try:   # the stall clock is shown to the boss only, so agents are not tempted to land filler to reset it
-        idle = (time.time() - float(open(R + "/state/stall_from").read())) / 60
+        idle = (now - float(open(R + "/state/stall_from").read())) / 60
         print("== stall clock: %.0f of %s min without an accepted merge%s" % (max(0, idle), stall_min,
-              " (stopped while paused)" if os.path.exists(R + "/state/HALT") else ""))
+              " (stopped %s)" % stop[1].split(";")[0].replace("as at", "at") if stop else ""))
     except (OSError, ValueError):
         pass
 if os.path.exists(R + "/state/HALT"):
