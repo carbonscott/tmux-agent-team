@@ -168,9 +168,15 @@ def problems():
             bad.append("the board cannot be read: %s" % e)
     else:
         bad.append("state/board.db is missing")
-    beat, _ = last_beat()
-    if beat is not None and time.time() - beat < 10:
-        bad.append("the heartbeat is %.0f s old: a gateway may still be serving this directory" % (time.time() - beat))
+    lock, holders = lock_state()
+    if lock == "held":
+        bad.append("the lock on config.json is held%s: a gateway may still be serving this directory. "
+                   "Stop it with ./teardown.sh" % (" by pid " + ", ".join(map(str, holders)) if holders else ""))
+    elif lock is None:      # the lock cannot be tested: fall back to the heartbeat, a guess
+        beat, _ = last_beat()
+        if beat is not None and time.time() - beat < 10:
+            bad.append("the heartbeat is %.0f s old: a gateway may still be serving this directory"
+                       % (time.time() - beat))
     return bad
 
 

@@ -276,4 +276,24 @@ kill -0 $holder 2>/dev/null && ok "E a lock holder that is not a gateway is not 
 kill $holder; wait $holder 2>/dev/null
 fi
 
+# ---- F: launch.sh --resume trusts the gateway's lock, and falls back to the heartbeat only without it
+if want F; then
+mk_workdir lead h1; setup_wd; launch >/dev/null 2>&1; start_gateway
+wait_for 8 test -s "$W/state/heartbeat"
+stop_gateway; rm -f "$STUB_DIR/session"      # the gateway is gone, but it beat a moment ago
+out=$(cd "$W" && ./launch.sh --resume 2>&1); rc=$?
+[ $rc -eq 0 ] && ok "F a resume right after the gateway stopped goes ahead (its lock is free)" || no "F a resume right after the gateway stopped goes ahead (its lock is free)" "$out"
+# a gateway that is alive but not beating (stopped with SIGSTOP), with an old heartbeat
+rm -f "$STUB_DIR/session"; start_gateway; wait_for 8 test -s "$W/state/heartbeat"
+rm -f "$STUB_DIR/session"; kill -STOP $GWPID
+python3 -c "import time; open('$W/state/heartbeat','w').write(str(time.time() - 600))"
+D0=$(cat "$W/state/deadline")
+out=$(cd "$W" && ./launch.sh --resume 2>&1); rc=$?
+[ $rc -ne 0 ] && ok "F a resume is refused while a gateway holds the lock, whatever the heartbeat says" || no "F a resume is refused while a gateway holds the lock, whatever the heartbeat says" "$out"
+check "F the refusal names the lock and the pid" "config.json.*$GWPID|$GWPID.*config.json" echo "$out"
+check "F and keeps the words the resume test looks for" 'gateway may still be serving' echo "$out"
+check "F the refusal moves no clock" "^$D0\$" cat "$W/state/deadline"
+kill -CONT $GWPID; stop_gateway
+fi
+
 finish

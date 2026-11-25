@@ -99,6 +99,10 @@ rebuilt, so `launch.sh --resume` rebuilds it. The choices made:
   writes a fresh beat at once, so a second crash before the gateway beats cannot give the
   same time back twice. Without a heartbeat (a run older than it) the newest file in
   `state/` and `records/` stands in, and the record says so.
+- **No second gateway.** A serving gateway holds an exclusive lock on `config.json`, so a
+  resume goes ahead as soon as that lock is free, even a second after the gateway stopped,
+  and is refused while anything holds it, even a gateway that has stopped beating. Only where
+  the lock cannot be tested does the old guess (no beat in the last 10 s) decide.
 - **Interrupted, ended, complete.** A run that had run out of time or stalled before it died
   is `ended`, not interrupted: nothing is resumed, it is archived. A paused run resumes
   paused, and gives back no time at resume: clearing the pause gives back both.
