@@ -22,6 +22,7 @@ import subprocess
 import sys
 import threading
 import time
+import unicodedata
 import uuid
 
 R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -41,13 +42,33 @@ MERGE_LOCK = threading.Lock()
 GITENV = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1", GIT_TERMINAL_PROMPT="0")
 
 
+# Characters a message may not hold, and that nothing an agent wrote may put raw on the boss's
+# screen: control characters (escape sequences, carriage return), format characters
+# (bidirectional overrides), line and paragraph separators, surrogates, private and unassigned
+# code points. Newline and tab are allowed. board.py has the same list.
+HIDDEN = {"Cc", "Cf", "Zl", "Zp", "Cs", "Co", "Cn"}
+
+
+def hidden(c):
+    return c not in "\n\t" and unicodedata.category(c) in HIDDEN
+
+
+def visible(s):
+    """s with every hidden character written as an escape (\\x1b, \\r, \\u202e)."""
+    return "".join(("\\r" if c == "\r" else "\\x%02x" % ord(c) if ord(c) < 256 else "\\u%04x" % ord(c))
+                   if hidden(c) else c for c in s)
+
+
 def log(agent, op, detail, code, ms, out):
-    rec = dict(ts=round(time.time(), 3), agent=agent, op=op, detail=detail[:4000], code=code, ms=ms, out=out[:1500])
+    # An accepted message is logged whole: this log is the only copy of it an archive keeps.
+    whole = op == "msg" and code == 0
+    rec = dict(ts=round(time.time(), 3), agent=agent, op=op, detail=detail if whole else detail[:4000], code=code,
+               ms=ms, out=out[:1500])
     with LOG_LOCK:
         with open(RECORDS, "a") as f:
             f.write(json.dumps(rec) + "\n")
-    print("%s %-4s %-6s code=%s %5dms  %s" % (time.strftime("%H:%M:%S"), agent, op, code, ms,
-                                               detail.replace("\n", " ")[:110]), flush=True)
+    print("%s %-4s %-6s code=%s %5dms  %s" % (time.strftime("%H:%M:%S"), agent, visible(op)[:20], code, ms,
+                                               visible(detail[:400].replace("\n", " "))[:110]), flush=True)
 
 
 def git(*args, cwd=None):
@@ -475,6 +496,7 @@ def do_msg(agent, board, to, body):
     """Store one message. The sender is the spool the request came in by, never the request."""
     detail = "to %s: %s" % (to, body)
     body = body.strip()
+    bad = next(((i, c) for i, c in enumerate(body) if hidden(c)), None)
     if to != "all" and to not in AGENTS:
         return 2, "unknown recipient %r: send to one of %s, or to all" % (to, ", ".join(AGENTS)), detail
     if to == agent:
@@ -484,6 +506,10 @@ def do_msg(agent, board, to, body):
     if len(body) > MSG_MAX:
         return 2, ("message too long (%d characters, at most %d): put long text in a board table and send a "
                    "pointer to it" % (len(body), MSG_MAX)), detail
+    if bad:     # refused, not cleaned: what is stored under a sender's name is exactly what it sent
+        return 2, ("message refused: it holds a control or format character (U+%04X at position %d). A message "
+                   "may hold printable text, newlines and tabs only." % (ord(bad[1]), bad[0] + 1)), detail
+    detail = "to %s: %s" % (to, body)        # what is stored, whole
     try:
         mid = board.send(to, body)
     except sqlite3.Error as e:
@@ -501,7 +527,7 @@ def do_inbox(board, everything):
         return 1, "ERROR: %s" % e, "inbox"
     if not rows:
         return 0, ("no messages to or from you yet" if everything else "no unread messages"), "inbox"
-    out = ["#%d %s UTC  %s -> %s:\n  %s" % (i, ts, snd, rcp, body.replace("\n", "\n  "))
+    out = ["#%d %s UTC  %s -> %s:\n  %s" % (i, ts, snd, rcp, visible(body).replace("\n", "\n  "))
            for i, ts, snd, rcp, body in rows]
     if not everything:
         out.append("(%d message%s, now marked read; team inbox --all shows every message to or from you)"
@@ -607,9 +633,36 @@ def handle(agent, board, req):
     return 2, "unknown op", op
 
 
+MAX_REQUEST = 1 << 20
+
+
+def unreadable(path):
+    """Why a request file cannot be served, or None. A refused request is still answered."""
+    if os.path.islink(path) or not os.path.isfile(path):
+        return "bad request: not a plain file"
+    size = os.path.getsize(path)
+    if size > MAX_REQUEST:
+        return ("request too large: %d bytes, at most %d (1 MiB). Split it, or keep long text in a file in your "
+                "workspace and send a pointer to it." % (size, MAX_REQUEST))
+    return None
+
+
 def serve(agent):
     base = "%s/ws/%s/.gw" % (R, agent)
     req_dir, resp_dir = base + "/req", base + "/resp"
+    stuck = set()        # request names that cannot be removed: answered once, then skipped
+
+    def answer(rid, code, out):
+        if os.path.realpath(resp_dir) != resp_dir:
+            return
+        tmp = os.path.join(resp_dir, rid + ".tmp")
+        try:
+            with open(tmp, "w") as f:
+                json.dump(dict(code=code, out=out), f)
+            os.rename(tmp, os.path.join(resp_dir, rid + ".json"))
+        except OSError as e:     # the agent's own spool is broken; keep serving the others
+            print("%s %s: answer not written: %s" % (time.strftime("%H:%M:%S"), agent, e), flush=True)
+
     for attempt in range(50):          # a locked board at start-up must not cost an agent its door
         try:
             board = Board(agent)
@@ -624,20 +677,30 @@ def serve(agent):
         except OSError:
             names = []
         for n in names:
+            if n in stuck:
+                continue
             path = os.path.join(req_dir, n)
+            req, why, op, size = None, None, "?", 0
             try:
-                if os.path.islink(path) or os.path.getsize(path) > 1 << 20:
-                    raise ValueError("bad request file")
-                req = json.load(open(path))
-                if not isinstance(req, dict):
-                    raise ValueError("bad request")
+                size = os.lstat(path).st_size
+                why = unreadable(path)
+                if why is None:
+                    req = json.load(open(path))
+                    if not isinstance(req, dict):
+                        req, why = None, "bad request: not a JSON object"
+                elif not os.path.islink(path) and os.path.isfile(path):
+                    with open(path, "rb") as f:           # only to name the op in the log
+                        m = re.search(rb'"op"\s*:\s*"([a-z]{1,20})"', f.read(4096))
+                    op = m.group(1).decode() if m else op
             except (OSError, ValueError):
-                req = None
+                req, why = None, why or "bad request: not readable JSON"
             try:
-                os.unlink(path)
+                os.rmdir(path) if os.path.isdir(path) and not os.path.islink(path) else os.unlink(path)
             except OSError:
-                pass
-            if req is None:
+                stuck.add(n)
+            if req is None:       # answered and logged, never dropped: the client would wait in vain
+                log(agent, op, "request of %d bytes refused: %s" % (size, why.split(":")[0]), 2, 0, why)
+                answer(re.sub(r"[^0-9a-f]", "", n[:-5])[:32] or "x", 2, "ERROR: " + why)
                 continue
             rid = re.sub(r"[^0-9a-f]", "", str(req.get("id", "")))[:32] or "x"
             t0 = time.time()
@@ -646,12 +709,7 @@ def serve(agent):
             except Exception as e:  # fail closed, keep serving
                 code, out, detail = 70, "gateway error: %r" % (e,), str(req.get("op"))
             log(agent, str(req.get("op")), detail, code, int((time.time() - t0) * 1000), out)
-            if os.path.realpath(resp_dir) != resp_dir:
-                continue
-            tmp = os.path.join(resp_dir, rid + ".tmp")
-            with open(tmp, "w") as f:
-                json.dump(dict(code=code, out=out), f)
-            os.rename(tmp, os.path.join(resp_dir, rid + ".json"))
+            answer(rid, code, out)
         time.sleep(0.05)
 
 

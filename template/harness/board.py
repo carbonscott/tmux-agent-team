@@ -4,16 +4,24 @@ import os
 import sqlite3
 import sys
 import time
+import unicodedata
 
 R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 W = int(os.environ.get("COLUMNS", "200"))
+HIDDEN = {"Cc", "Cf", "Zl", "Zp", "Cs", "Co", "Cn"}     # as in gateway.py: never put raw on the boss's screen
+
+
+def visible(s):
+    """s with every control or format character but newline and tab written as an escape (\\x1b, \\r)."""
+    return "".join(("\\r" if c == "\r" else "\\x%02x" % ord(c) if ord(c) < 256 else "\\u%04x" % ord(c))
+                   if c not in "\n\t" and unicodedata.category(c) in HIDDEN else c for c in s)
 
 
 def show(db, title, sql):
     print("-- " + title)
     try:
         for row in db.execute(sql).fetchall():
-            print((" | ".join("" if v is None else str(v).replace("\n", " ") for v in row))[:W])
+            print((" | ".join("" if v is None else visible(str(v)).replace("\n", " ") for v in row))[:W])
     except sqlite3.Error as e:
         print("   (%s)" % e)
 
@@ -25,7 +33,7 @@ if "--messages" in sys.argv:      # boss.sh messages: every message, oldest firs
     except sqlite3.Error:
         rows = []
     for i, ts, snd, rcp, body in rows:
-        print("#%d %s UTC  %s -> %s: %s" % (i, ts, snd, rcp, body.replace("\n", "\n    ")))
+        print("#%d %s UTC  %s -> %s: %s" % (i, ts, snd, rcp, visible(body).replace("\n", "\n    ")))
     print("(%d message%s)" % (len(rows), "" if len(rows) == 1 else "s"))
     sys.exit(0)
 

@@ -151,7 +151,7 @@ If it returns **HALT**, the monitor blocked something and the whole team is paus
 | A real violation by a helper | `harness/boss.sh remove <id>`, then resume and tell the others as above |
 | A real violation by the lead | `harness/boss.sh end` |
 
-Agents can send each other messages: `team msg <agent|all> "<text>"` stores one in the board's table `messages`, `team inbox` reads it, and `team status` shows `unread messages: <n>` to the recipient. The gateway sets the sender, refuses unknown recipients, removed senders and anything sent during a pause, and nobody can change the table through `team sql`. `harness/boss.sh messages` shows them all. Your own `say` messages are typed into a window instead and are not stored there.
+Agents can send each other messages: `team msg <agent|all> "<text>"` stores one in the board's table `messages`, `team inbox` reads it, and `team status` shows `unread messages: <n>` to the recipient. The gateway sets the sender, refuses unknown recipients, removed senders, anything sent during a pause and any text with control or format characters (printable text, newlines and tabs only), and nobody can change the table through `team sql`. `harness/boss.sh messages` shows them all. Your own `say` messages are typed into a window instead and are not stored there.
 
 Paused agents do not restart by themselves; the `say` step is required. Do not coach the team: your messages carry facts about the run (time, a pause cleared, a removal), never hints about the work.
 

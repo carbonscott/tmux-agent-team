@@ -37,6 +37,12 @@ if [ -n "$H2" ]; then
   check "two simultaneous claims produce one winner" '^1$'        echo "$(cat state/c1.out state/c2.out | grep -cE "^($H1|$H2)\$")"
 fi
 
+echo "-- messages"
+as $H1 $T msg lead "probe message" >/dev/null 2>&1
+check "a message reaches its recipient, under the sender" "$H1 -> lead: +probe message" sh -c "cd '$R/ws/lead' && $T inbox | tr '\n' ' '"
+check "nobody can write the messages table"         'not allowed' as lead $T sql "INSERT INTO messages(sender, recipient, body) VALUES ('lead', '$H1', 'forged')"
+check "a message with control characters is refused" 'control or format character' as $H1 $T msg lead "$(printf 'x\033[2Ky')"
+
 echo "-- the merge job"
 cd "$R/ws/$H1" || exit 1
 echo x > outside_probe.txt; git add -A; git commit -q -m "edit outside the allowed paths"
