@@ -5,7 +5,10 @@
                                   after the run has been stopped)
 
 The file holds only what lasts: the bare repository (central.git, the work), the records (the
-audit) and STATUS.txt, whose first line says what the run came to. Workspaces, the board, the
+audit) and STATUS.txt, whose first line says what the run came to. Two files are added to the
+records: run.json, the run's facts that lived in state/ and config.json (when it started and
+ended, what was done, the agents and their profiles), so that report.py can show the archived
+run truthfully, and report.html, that page as it was when the run was put away. Workspaces, the board, the
 tools and the settings stay out: they are the stale-but-plausible parts a later reader could
 mistake for live state. Everything is under one folder named like the file.
 
@@ -20,6 +23,9 @@ import subprocess
 import sys
 import tarfile
 import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import report  # noqa: E402
 
 R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CFG = json.load(open(R + "/config.json"))
@@ -115,7 +121,10 @@ def status_text(verify_ok, verify_out, stopped):
               "  central.git/  the bare repository; the result is its main branch: git clone central.git <dir>",
               "  records/      every tool call (actions.jsonl), gateway request (gateway.jsonl) and merge",
               "                (merges.jsonl) of the run, every message (gateway.jsonl, op msg), any",
-              "                reviewed pauses (halt.*.json) and resumes after a crash (resumes.jsonl)",
+              "                reviewed pauses (halt.*.json) and resumes after a crash (resumes.jsonl);",
+              "                run.json, the run's facts (started, ended, done, agents, profiles); and",
+              "                report.html, the run's page. Rebuild the page with any copy of the template:",
+              "                python3 harness/report.py --records <this folder>/records",
               ""]
     return "\n".join(lines)
 
@@ -136,18 +145,26 @@ def write(dest):
         verify_ok, verify_out = False, "verify.py timed out"
     status = status_text(verify_ok, verify_out, stopped)
     say(status.splitlines()[0])
-    data = status.encode()
-    info = tarfile.TarInfo(name + "/STATUS.txt")
-    info.size, info.mtime, info.mode = len(data), int(stopped), 0o644
+    # what state/ and config.json knew, for report.py once they are gone; and the page itself
+    facts = dict(report.live_facts(R, stopped), verified=verify_ok)
+    added = {name + "/STATUS.txt": status.encode(), name + "/records/run.json": json.dumps(facts, indent=1).encode()}
+    try:
+        added[name + "/records/report.html"] = report.render(R + "/records", facts).encode()
+    except Exception as e:      # the page is a convenience: without it the archive is still whole
+        say("archive: the run's page was not written (%r); report.py --records can write it later" % (e,))
     try:
         with open(final, "xb") as f, tarfile.open(fileobj=f, mode="w:gz") as tar:
-            tar.addfile(info, io.BytesIO(data))
+            for arc, data in added.items():
+                info = tarfile.TarInfo(arc)
+                info.size, info.mtime, info.mode = len(data), int(stopped), 0o644
+                tar.addfile(info, io.BytesIO(data))
             tar.add(R + "/central.git", arcname=name + "/central.git")
             if os.path.isdir(R + "/records"):
-                tar.add(R + "/records", arcname=name + "/records")
+                tar.add(R + "/records", arcname=name + "/records",
+                        filter=lambda ti: None if ti.name in added else ti)
         with tarfile.open(final) as tar:          # read it back before anything is deleted
             names = tar.getnames()
-        if name + "/STATUS.txt" not in names or name + "/central.git/HEAD" not in names:
+        if not all(n in names for n in [name + "/central.git/HEAD"] + list(added)):
             raise OSError("the archive does not read back complete")
     except FileExistsError:
         sys.exit("archive: %s already exists; it is not overwritten" % final)

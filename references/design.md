@@ -65,7 +65,7 @@ orders are, which keeps the briefs short and shows that the board carries everyt
 | Removing a helper | The gateway and monitor refuse it. Reopening its tasks is left to the lead. Never exercised. |
 | Agents isolated from the boss's account | Not enforced. All sessions run as one OS user with one login. The sandbox confines their shell commands; the agent processes themselves are outside it. |
 | Resuming after a crash | `launch.sh --resume` refuses unless the run is interrupted and its files check out, and gives back the time down measured from the gateway's heartbeat (tested with stubs). That the lead reopens the claims of helpers that do not return is only requested by its rejoining brief. A real crash and resume has never been run. |
-| Putting a run away | `teardown.sh --archive` keeps only the repository, the records and `STATUS.txt`, writes beside the work directory and never into it, refuses to overwrite, and deletes nothing until the file has been read back. Tested with the stub tmux only; never used on a real run. Nothing stops a boss from leaving a run's files lying around instead. |
+| Putting a run away | `teardown.sh --archive` keeps only the repository, the records (with `run.json`, the run's facts, and `report.html`, its page) and `STATUS.txt`, writes beside the work directory and never into it, refuses to overwrite, and deletes nothing until the file has been read back. Tested with the stub tmux only; never used on a real run. Nothing stops a boss from leaving a run's files lying around instead. |
 | Dry run of the merge job (`team precheck`) | Read-only by construction: the same merge, path rule and checks as `team mr`, in a private clone of `main` that is then deleted. It never moves `main`, is not recorded as a merge, and is refused whenever the door is (pause, removal, time up). It does not take the merge lock, so its verdict is for `main` at that moment and something else may land before `team mr`. Tested with stubs only; not yet used in a real run. |
 | Honest results | A test suite is a weaker check than a proof. The merge job limits which paths change; it does not inspect what the code does. |
 | Tools outside the agent's profile | Enforced twice: the session is started with only the profile's tools (`--tools`), and the monitor refuses any other tool. Tested with stubs only. |
@@ -80,8 +80,10 @@ Not yet exercised in any run: any profile other than `sealed` (only stub-based t
 started one), WebFetch through a `web-fetch` subagent, splitting a task, moving a helper between crews, the
 five-minute reminder, a slow check, a helper dying mid-task, a stalled run, teams larger than four,
 resuming a run after a real crash (`launch.sh --resume` has run only against stub tmux and
-claude), archiving a real run (`teardown.sh --archive`), and the run report (`report.py`) on a
-real run's records.
+claude), and archiving a real run (`teardown.sh --archive`). The run report (`report.py`) has been
+rendered from a real run's records (seven agents, 33 minutes) and from a real archive older than
+`run.json` (through its `STATUS.txt`); an archive with `run.json` has been written only in
+stub-based tests.
 
 A task written from a goal contract, a boss running under `/goal`, and an agent running
 `/goal` inside the team have not been exercised either.
@@ -174,7 +176,10 @@ owns intervals" may act on it. The agents are not at risk: they cannot read `rec
 
 So `./teardown.sh --archive` seals the two lasting parts into one dated file outside the
 work directory, puts a plain status line on top (`abandoned run, stopped 14:41, 4 of 7
-done, not verified`), and then deletes the rest. "Verified" is judged by running
+done, not verified`), and then deletes the rest. The facts the run report needs that lived in
+`state/` and `config.json` (when the run started and ended and how, what was done, the agents and
+their profiles, removals) go into the archived records as `run.json`, and the final page as
+`report.html`, so the archive alone can show the run truthfully. "Verified" is judged by running
 `verify.py` when the archive is made, not taken from the merge job's word. `--purge`
 remains for runs with nothing to keep; it is not offered where unverified work may be
 lost, such as after a crash.
@@ -185,9 +190,12 @@ lost, such as after a crash.
 a page for the owner: it shows at a glance how much was done, a timeline of the run to scale
 (each agent's activity, every merge, block, pause, removal and time down), and the tables
 behind it. It reads `config.json`, `state/` and `records/` and writes nothing else, so it
-can be run at any time. It is one file with no external scripts, styles or fonts, so it can
-be mailed or opened offline, and everything taken from the records is escaped: a merge title
-or a blocked command is text an agent wrote, and the page must not run it.
+can be run at any time. On an archive it reads `records/` alone, and the run's facts from
+`records/run.json` (or, for an archive older than that, from `STATUS.txt`, which does not say
+the profiles or when a helper was removed). It is one file with no external scripts, styles
+or fonts, so it can be mailed or opened offline, and everything taken from the records is
+escaped: a merge title or a blocked command is text an agent wrote, and the page must not run
+it.
 
 ## Lessons from building it
 

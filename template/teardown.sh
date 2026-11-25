@@ -27,7 +27,8 @@ else
   [ -n "$(left)" ] && echo "still running (process ids): $(left)"
   free || echo "still running: $(python3 "$R/harness/runstate.py" --lock)"
 fi
-purge() { rm -rf "$R"/ws "$R"/central.git "$R"/records "$R"/state "$R"/tools "$R"/harness/settings; echo "runtime files deleted"; }
+purge() { rm -rf "$R"/ws "$R"/central.git "$R"/records "$R"/state "$R"/tools "$R"/harness/settings "$R"/report.html \
+  "$R"/harness/__pycache__; echo "runtime files deleted"; }
 case "$mode" in
   --purge)   purge;;
   --archive) f=$(python3 "$R/harness/archive.py" "$DEST") && [ -s "$f" ] ||

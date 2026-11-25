@@ -49,6 +49,7 @@ refute "and it never says archived" '^archived:' echo "$out"
 ( cd "$W" && harness/boss.sh remove h2 ) >/dev/null 2>&1
 echo '{"tool_name":"Bash","tool_input":{"command":"sudo ls"},"cwd":"'"$W/ws/h1"'"}' | python3 "$W/harness/hook.py" h1 >/dev/null 2>&1
 echo '{"ts": 1, "down_s": 60}' >> "$W/records/resumes.jsonl"
+( cd "$W" && python3 harness/report.py ) >/dev/null 2>&1; mkdir -p "$W/harness/__pycache__"; touch "$W/harness/__pycache__/x.pyc"
 mkdir -p "$TOP/rel"
 out=$(cd "$TOP" && "$W/teardown.sh" --archive rel 2>&1); rc=$?
 [ $rc -eq 0 ] && ok "a stopped, paused run can still be archived" || no "a stopped, paused run can still be archived" "$out"
@@ -66,6 +67,18 @@ check "STATUS.txt counts the messages" '^messages: +2 ' cat "$s"
 check "and the messages themselves are in the archived records" 'kept in the records' cat "$(dirname "$s")/records/gateway.jsonl"
 check "STATUS.txt carries what verify.py said" 'FAIL +b' cat "$s"
 check "STATUS.txt says how to get the work back" 'git clone central.git' cat "$s"
+d=$(dirname "$s")
+check "the archive keeps the run's facts for the report (records/run.json)" '"started": [0-9]' cat "$d/records/run.json"
+check "run.json says how the run ended" '"kind": "stopped"' cat "$d/records/run.json"
+check "the archive holds the run's page, records/report.html" '1 of 3' cat "$d/records/report.html"
+check "which says the run was abandoned, not that it never started" 'ABANDONED' cat "$d/records/report.html"
+check "and shows the pause in progress at the stop" 'still paused at the stop' cat "$d/records/report.html"
+out=$(python3 "$REPO/template/harness/report.py" --records "$d/records" -o "$TOP/again.html" 2>&1)
+check "report.py --records rebuilds the page from the unpacked archive" "^report: $TOP/again.html\$" echo "$out"
+check "with what was done" '1 of 3' cat "$TOP/again.html"
+refute "and never says NOT STARTED" 'NOT STARTED' cat "$TOP/again.html"
+refute "--archive leaves no report.html in the work directory" . sh -c "ls '$W/report.html' 2>/dev/null"
+refute "nor a harness/__pycache__" . sh -c "ls -d '$W/harness/__pycache__' 2>/dev/null"
 check "the history is in the archive" 'land a' sh -c "git -C '$(dirname "$s")/central.git' log --format=%s main"
 check "a second --archive finds nothing to archive" 'nothing to archive' sh -c "cd '$W' && ./teardown.sh --archive '$TOP/rel'"
 ( cd "$W" && ./teardown.sh --archive "$TOP/rel" ) >/dev/null 2>&1 && no "and fails" || ok "and fails"
@@ -80,6 +93,18 @@ f=$(ls "$TOP"/team-archive-*.tar.gz 2>/dev/null | head -1)
 s=$(unpack "${f:-/nonexistent}")
 check "a finished run whose check no longer passes is finished but not verified" '^finished run, stopped .+, 3 of 3 done, not verified$' head -1 "$s"
 check "and its finish time is kept" '^finished at: +[0-9]{4}-' cat "$s"
+d=$(dirname "$s")
+check "a finished run's archived page says COMPLETE" '<span class="s">COMPLETE</span>' cat "$d/records/report.html"
+cp -r "$d/records" "$W/records"     # the work directory was purged: no state/, but records/run.json
+check "a work directory without state/ is reported from records/run.json" '3 of 3' \
+  sh -c "cd '$W' && python3 harness/report.py -o '$TOP/wd.html' >/dev/null 2>&1; cat '$TOP/wd.html'"
+rm -rf "$W/records" "$d/records/run.json"
+python3 "$REPO/template/harness/report.py" --records "$d/records" -o "$TOP/old.html" >/dev/null 2>&1
+check "an archive older than run.json is reported from its STATUS.txt" '<span class="n">3 of 3</span><span class="s">COMPLETE' cat "$TOP/old.html"
+check "and the page says where the facts came from" 'come from STATUS.txt' cat "$TOP/old.html"
+rm "$d/STATUS.txt"
+python3 "$REPO/template/harness/report.py" --records "$d/records" -o "$TOP/none.html" >/dev/null 2>&1 \
+  && no "records with neither run.json nor STATUS.txt are refused" || ok "records with neither run.json nor STATUS.txt are refused"
 
 # ---- an interrupted run (session and gateway already gone) is archived as it lies
 mk_workdir; setup_wd; launch >/dev/null 2>&1; start_gateway

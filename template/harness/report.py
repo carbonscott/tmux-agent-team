@@ -1,10 +1,21 @@
-"""Write one self-contained HTML page that shows what a run did.  usage: report.py [-o FILE]
+"""Write one self-contained HTML page that shows what a run did.
 
-Without -o the page is report.html in the work directory. The last line printed is
-"report: <full path>". It reads config.json, state/ and records/ and changes nothing, so it
-works before a run, during one and after one. The page loads nothing from the network, and
-every piece of text that comes from the records is escaped.
+  report.py [-o FILE]                  the run in this work directory
+  report.py --records DIR [-o FILE]    a run put away by teardown.sh --archive: DIR is the records/
+                                       folder of the unpacked archive (any copy of report.py will do)
+
+Without -o the page is report.html in the work directory, or in DIR with --records. The last line
+printed is "report: <full path>". It reads and changes nothing else, so it works before a run,
+during one, after one, and on an archive. The page loads nothing from the network, and every
+piece of text that comes from the records is escaped.
+
+The records say what happened; the run's facts (when it started and ended, what is done, the
+agents and their profiles) come from config.json and state/ in a work directory, and from
+records/run.json in an archive (archive.py writes it). For an archive older than run.json they
+come from its STATUS.txt, which does not say the profiles or when a helper was removed. A work
+directory without state/ but with records/run.json is read like an archive.
 """
+import calendar
 import collections
 import glob
 import html
@@ -19,11 +30,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import runclock  # noqa: E402
 
 R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STATE, REC = R + "/state", R + "/records"
-CFG = json.load(open(R + "/config.json"))
-AGENTS, STATEMENTS = CFG["agents"], CFG["task"]["statements"]
 NOW = time.time()
+# the run being shown; use() sets them. AT is "now" for this run: an archived run stopped at its archive time
+REC, STATE, F, AGENTS, STATEMENTS, AT = R + "/records", None, {}, [], [], NOW
 e = lambda s: html.escape(str(s), quote=True)
+USAGE = "usage: report.py [-o FILE] | report.py --records DIR [-o FILE]"
 
 
 def load(name):
@@ -76,7 +87,7 @@ def span(s):
 
 
 def profile_of(a):
-    return (CFG.get("agent_profiles") or {}).get(a) or CFG.get("profile") or "sealed"
+    return (F.get("profiles") or {}).get(a) or "unknown"
 
 
 def first_line(out, prefix):
@@ -88,20 +99,139 @@ def first_line(out, prefix):
     return str(out)[:300]
 
 
+# ------------------------------------------------------------------ the run's facts
+def live_facts(root, stopped=None):
+    """The run's facts from a work directory's config.json and state/. With stopped (the time the
+    run was stopped), also how and when it ended: what archive.py keeps as records/run.json."""
+    cfg = json.load(open(root + "/config.json"))
+    st = root + "/state"
+    try:
+        landed = json.load(open(st + "/landed.json"))
+    except (OSError, ValueError):
+        landed = []
+    stalled = jfile(st + "/STALLED")
+    if stalled is not None:
+        stalled.setdefault("ts", os.path.getmtime(st + "/STALLED"))
+    rdir = st + "/removed"
+    f = dict(session=cfg.get("session"), agents=cfg["agents"], statements=cfg["task"]["statements"],
+             budget_min=cfg.get("budget_min"), stall_min=cfg.get("stall_min"),
+             profiles={a: (cfg.get("agent_profiles") or {}).get(a) or cfg.get("profile") or "sealed"
+                       for a in cfg["agents"]},
+             started=num(st + "/started"), deadline=num(st + "/deadline"), done_at=num(st + "/DONE"),
+             heartbeat=num(st + "/heartbeat"), landed=landed if isinstance(landed, list) else [],
+             stalled=stalled, halt=jfile(st + "/HALT"),
+             removed=sorted([os.path.getmtime(os.path.join(rdir, a)), a] for a in os.listdir(rdir))
+             if os.path.isdir(rdir) else [])
+    if stopped is not None:
+        f.update(version=1, stopped=stopped, end=end_of(f, stopped, f["heartbeat"]))
+    return f
+
+
+def end_of(f, stopped, alive):
+    """How and when a stopped run ended: complete, stalled, time up, stopped (before any of those)
+    or not started. alive: the last sign of life before the stop. As in runstate.py, a pause in
+    progress holds the deadline back."""
+    if not f.get("started"):
+        return dict(kind="not started", ts=None)
+    if f.get("done_at"):
+        return dict(kind="complete", ts=f["done_at"])
+    if f.get("stalled") is not None:
+        return dict(kind="stalled", ts=f["stalled"].get("ts") or alive or stopped)
+    alive = min(stopped, alive) if alive else stopped
+    deadline, halt = f.get("deadline"), f.get("halt") or {}
+    if deadline and isinstance(halt.get("ts"), (int, float)):
+        deadline += max(0.0, alive - halt["ts"])
+    if deadline and deadline <= alive:
+        return dict(kind="time up", ts=deadline)
+    return dict(kind="stopped", ts=alive)
+
+
+def when(s):
+    """A time as STATUS.txt writes it ("2026-11-25 01:23:22 UTC"), in seconds, or None."""
+    try:
+        t = time.strptime(s, "%Y-%m-%d %H:%M:%S %Z")
+    except (TypeError, ValueError):
+        return None
+    return float(calendar.timegm(t) if s.endswith(("UTC", "GMT")) else time.mktime(t))
+
+
+def status_facts(rec):
+    """The facts of an archive older than run.json, from the STATUS.txt beside its records."""
+    text = open(os.path.join(os.path.dirname(rec), "STATUS.txt")).read()
+    kv = {k.strip(): v.strip() for k, v in re.findall(r"(?m)^([a-z][a-z ]*):[ \t]+(.*)$", text)}
+    words = lambda k: [] if kv.get(k, "-") in ("-", "") else kv[k].split()
+    flags = words("state at stop")
+    budget = re.match(r"([0-9.]+)", kv.get("budget", ""))
+    f = dict(session=kv.get("session"), agents=words("agents"), statements=words("statements"),
+             budget_min=float(budget.group(1)) if budget else None, stall_min=None, profiles={},
+             started=when(kv.get("started")), done_at=when(kv.get("finished at")) if "DONE" in flags else None,
+             heartbeat=None, landed=words("done on main"), stalled=None, halt=None,
+             removed=[[None, a] for a in words("removed helpers")], version=0, stopped=when(kv.get("stopped")),
+             source="STATUS.txt: this archive is older than records/run.json, so the agents' profiles and the "
+                    "times of removals are unknown, and the deadline is worked out from the budget")
+    if f["budget_min"] is not None and f["budget_min"] == int(f["budget_min"]):
+        f["budget_min"] = int(f["budget_min"])
+    if "HALT" in flags:
+        m = re.search(r"The blocked action:\n(.*)", text)
+        try:
+            f["halt"] = json.loads(m.group(1)) if m else {}
+        except ValueError:
+            f["halt"] = {"reason": "see STATUS.txt"}
+    # the deadline moves later by every pause and every resume's time given back
+    given = sum(float(r.get("given_back_s") or 0) for r in load_from(rec, "resumes.jsonl"))
+    pauses = runclock.stops(rec)[0]
+    if f["started"] and f["budget_min"]:
+        f["deadline"] = f["started"] + f["budget_min"] * 60 + given + sum(b - a for a, b in pauses)
+    else:
+        f["deadline"] = None
+    last = max([x.get("ts", 0) for n in ("actions.jsonl", "gateway.jsonl", "merges.jsonl")
+                for x in load_from(rec, n)[-1:]] or [0]) or None
+    if "STALLED" in flags:
+        f["stalled"] = {"ts": last}
+    f["end"] = end_of(f, f["stopped"] or last or NOW, last)
+    return f
+
+
+def load_from(rec, name):
+    global REC
+    keep, REC = REC, rec
+    try:
+        return load(name)
+    finally:
+        REC = keep
+
+
+def archived_facts(rec):
+    """The facts of an archived run: records/run.json, else the archive's STATUS.txt."""
+    try:
+        f = json.load(open(os.path.join(rec, "run.json")))
+        if isinstance(f, dict) and f.get("agents") is not None:
+            return f
+    except (OSError, ValueError):
+        pass
+    try:
+        return status_facts(rec)
+    except OSError:
+        sys.exit("report: %s holds no run.json and there is no STATUS.txt beside it, so what the run was "
+                 "cannot be told" % rec)
+
+
+def use(rec, facts, state=None):
+    """Show this run: its records folder, its facts, and (in a work directory) its state/."""
+    global REC, STATE, F, AGENTS, STATEMENTS, AT
+    REC, STATE, F = rec, state, facts
+    AGENTS, STATEMENTS = list(facts.get("agents") or []), list(facts.get("statements") or [])
+    AT = facts.get("stopped") or NOW
+
+
 # ------------------------------------------------------------------ gather
 def gather():
     g = dict(acts=load("actions.jsonl"), gw=load("gateway.jsonl"), merges=load("merges.jsonl"),
              resumes=load("resumes.jsonl"))
-    g["started"], g["deadline"] = num(STATE + "/started"), num(STATE + "/deadline")
-    g["done_at"], g["beat"] = num(STATE + "/DONE"), num(STATE + "/heartbeat")
-    try:
-        g["landed"] = [s for s in json.load(open(STATE + "/landed.json")) if s in STATEMENTS]
-    except (OSError, ValueError):
-        g["landed"] = []
-    st = jfile(STATE + "/STALLED")
-    if st is not None:
-        st.setdefault("ts", os.path.getmtime(STATE + "/STALLED"))
-    g["stalled"] = st
+    g["started"], g["deadline"] = F.get("started"), F.get("deadline")
+    g["done_at"], g["beat"] = F.get("done_at"), F.get("heartbeat")
+    g["landed"] = [s for s in (F.get("landed") or []) if s in STATEMENTS]
+    g["stalled"] = F.get("stalled")
     pauses = []
     for p in sorted(glob.glob(REC + "/halt.*.json")):
         h = jfile(p) or {}
@@ -110,15 +240,12 @@ def gather():
         except (IndexError, ValueError):
             end = os.path.getmtime(p)
         pauses.append(dict(h, end=end))
-    h = jfile(STATE + "/HALT")
-    if h is not None:
-        pauses.append(dict(h, end=None))
+    if F.get("halt") is not None:
+        pauses.append(dict(F["halt"], end=None))
     for p in pauses:
-        p["ts"] = float(p.get("ts") or 0) or (p["end"] or NOW)
+        p["ts"] = float(p.get("ts") or 0) or (p["end"] or AT)
     g["pauses"] = pauses
-    rdir = STATE + "/removed"
-    g["removed"] = sorted(((os.path.getmtime(os.path.join(rdir, a)), a) for a in os.listdir(rdir)), key=lambda x: x[0]) \
-        if os.path.isdir(rdir) else []
+    g["removed"] = sorted(((t, a) for t, a in (F.get("removed") or [])), key=lambda x: x[0] or 0)
     g["rejected"] = [x for x in g["gw"] if x.get("op") == "mr" and x.get("code") != 0]
     g["msgs"] = messages(g["gw"])
     return g
@@ -128,8 +255,8 @@ def messages(gw):
     """Counts per (sender, recipient): from the board's messages table where there is one, else
     from the gateway log (op msg)."""
     pairs = collections.Counter()
-    db = STATE + "/board.db"
-    if os.path.exists(db):
+    db = STATE + "/board.db" if STATE else ""
+    if db and os.path.exists(db):
         try:
             c = sqlite3.connect("file:%s?mode=ro" % db, uri=True, timeout=2)
             if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='messages'").fetchone():
@@ -147,11 +274,17 @@ def messages(gw):
     return pairs
 
 
+ARCHIVED = {"complete": ("COMPLETE", "good"), "stalled": ("STALLED", "bad"), "time up": ("TIME UP", "bad"),
+            "not started": ("NOT STARTED", "idle")}
+
+
 def state_of(g):
     if not g["started"]:
         return "NOT STARTED", "idle"
     if g["done_at"] or len(g["landed"]) == len(STATEMENTS):
         return "COMPLETE", "good"
+    if F.get("end"):        # an archived run: as archive.py found it; stopped before any end, it was abandoned
+        return ARCHIVED.get(F["end"].get("kind"), ("ABANDONED", "bad"))
     if g["stalled"] is not None:
         return "STALLED", "bad"
     if g["deadline"] and NOW >= g["deadline"]:
@@ -164,8 +297,11 @@ def state_of(g):
 
 
 def ended(g):
-    """When the run stopped running: it was done or stalled, its time ran out, or it is still going
-    (then now, or the last beat when the gateway is down). Pauses and time down are inside it."""
+    """When the run stopped running: it was done or stalled, its time ran out, it was stopped and
+    archived, or it is still going (then now, or the last beat when the gateway is down). Pauses
+    and time down are inside it."""
+    if F.get("end"):
+        return F["end"].get("ts") or AT
     end = g["done_at"] or (g["stalled"] or {}).get("ts")
     if end is None:
         paused = any(p["end"] is None for p in g["pauses"])
@@ -177,14 +313,8 @@ def ended(g):
 
 def window(g):
     t0 = g["started"]
-    ends = [g["done_at"], (g["stalled"] or {}).get("ts")]
-    end = next((t for t in ends if t), None)
-    if end is None:
-        end = min(NOW, g["deadline"]) if g["deadline"] else NOW
-        if g["beat"] and NOW - g["beat"] > 30:
-            end = g["beat"]
     last = [x.get("ts", 0) for k in ("acts", "gw", "merges") for x in g[k][-1:]]
-    end = max([end] + last)
+    end = max([ended(g)] + last)
     return t0, max(end, t0 + 60)
 
 
@@ -279,7 +409,7 @@ def timeline(g):
                 ms.append('<b class="m blk" style="left:%.3f%%" title="%s"></b>' % (
                     pct(x["ts"], t0, t1), e("BLOCKED %s: %s" % (clock(x["ts"]), x.get("reason", "")))))
         for t, who in g["removed"]:
-            if who == a:
+            if who == a and t:
                 ms.append('<i class="gone" style="left:%.3f%%" title="%s"></i>' % (pct(t, t0, t1), e("removed at " + clock(t))))
         rows.append('<div class="lane"><div class="who">%s</div><div class="track">%s%s</div></div>' % (
             e(a), cells, "".join(ms)))
@@ -323,7 +453,7 @@ def page(g):
     t0 = g["started"]
     rel = lambda t: ("+" + span(t - t0)) if t0 and t else ""
     # the running time: the budget's clock stops while the team is paused and while the run is down
-    run_s, paused_s, down_s = runclock.used(REC, t0, ended(g), jfile(STATE + "/HALT")) if t0 else (0, 0, 0)
+    run_s, paused_s, down_s = runclock.used(REC, t0, ended(g), F.get("halt")) if t0 else (0, 0, 0)
     done_when = {}
     for mg in g["merges"]:
         for s in mg.get("landed", []):
@@ -360,17 +490,18 @@ def page(g):
                        e(sum(1 for x in g["rejected"] if x.get("agent") == a)),
                        e("%d / %d" % (sent[a], got[a])),
                        e(clock(min(ts)) if ts else "-"), e(clock(max(ts)) if ts else "-"),
-                       e("removed %s" % clock(next(t for t, w in g["removed"] if w == a)))
+                       e("removed %s" % (clock(next(t for t, w in g["removed"] if w == a)) if F.get("removed") and
+                                          next(t for t, w in g["removed"] if w == a) else "(time unknown)"))
                        if any(w == a for _, w in g["removed"]) else ""])
     pauses = []
     for p in g["pauses"]:
         inp = p.get("input") or {}
         what = inp.get("command") or inp.get("file_path") or inp.get("url") or json.dumps(inp)[:300] \
             if isinstance(inp, dict) else str(inp)
-        pauses.append([e(clock(p["ts"])), e(clock(p["end"]) if p["end"] else "still paused"),
-                       e(span((p["end"] or NOW) - p["ts"])), e(p.get("agent", "?")), e(p.get("by", "")),
+        pauses.append([e(clock(p["ts"])), e(clock(p["end"]) if p["end"] else "still paused" + (" at the stop" if
+                       F.get("end") else "")), e(span((p["end"] or AT) - p["ts"])), e(p.get("agent", "?")), e(p.get("by", "")),
                        e(p.get("tool", "")), "<code>%s</code>" % e(str(what)[:600]), e(p.get("reason", ""))])
-    removals = [[e(clock(t)), e(rel(t)), e(a)] for t, a in g["removed"]]
+    removals = [[e(clock(t) if t else "unknown"), e(rel(t)), e(a)] for t, a in g["removed"]]
     resumes = []
     for r in g["resumes"]:      # a record of launch.sh --resume (runstate.py), in human terms
         given = "none while paused: given back when the pause was cleared" if r.get("paused") else (
@@ -392,7 +523,7 @@ def page(g):
             e("no merge accepted for %s min" % st["stall_min"] if "stall_min" in st else "no progress")))
     total_msgs = sum(g["msgs"].values())
     pairs = [[e(s), e(r), e(k)] for (s, r), k in sorted(g["msgs"].items())]
-    budget = CFG.get("budget_min")
+    budget = F.get("budget_min")
     stopped = ", ".join(w + " " + span(v) for w, v in (("paused", paused_s), ("down", down_s)) if v >= 1)
     facts = [("done", "%d of %d" % (n, m)), ("state", state),
              ("running time", span(run_s) + (" of %s min" % budget if budget else ""))]
@@ -409,7 +540,7 @@ def page(g):
 <div class="bar"><i style="width:%(w).1f%%"></i></div>
 <ul class="chips">%(chips)s</ul>
 <dl class="facts">%(facts)s</dl>
-%(events)s
+%(source)s%(events)s
 <section><h2>Timeline</h2>%(tl)s</section>
 <section><h2>Accepted merges</h2>%(merges)s</section>
 <section><h2>Rejected merge requests</h2>%(rej)s</section>
@@ -421,11 +552,14 @@ msgs: sent / received.</p></section>
 <section><h2>Resumes</h2>%(resumes)s</section>
 <section><h2>Messages</h2>%(pairs)s</section>
 """ % dict(
-        sess=e(CFG.get("session", "")), now=e(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(NOW))),
-        when=e("launched " + time.strftime("%Y-%m-%d %H:%M", time.localtime(t0)) if t0 else "not launched yet"),
+        sess=e(F.get("session") or ""), now=e(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(NOW))),
+        when=e("launched " + time.strftime("%Y-%m-%d %H:%M", time.localtime(t0)) if t0 else "not launched yet") + (
+            " &middot; archived " + e(time.strftime("%Y-%m-%d %H:%M", time.localtime(F["stopped"])))
+            if F.get("stopped") else ""),
         agents=len(AGENTS), tone=tone, n=n, m=m, state=e(state), w=100.0 * n / max(1, m), chips=chips,
         facts="".join("<div><dt>%s</dt><dd>%s</dd></div>" % (e(k), e(v)) for k, v in facts),
         events='<ul class="events">%s</ul>' % "".join(events) if events else "",
+        source='<p class="muted">The run\'s facts come from %s.</p>\n' % e(F["source"]) if F.get("source") else "",
         tl=timeline(g),
         merges=table(["time", "since start", "agent", "title", "made done", "files"], merges, "No merge accepted yet.",
                      "merges", first=3),
@@ -442,7 +576,7 @@ msgs: sent / received.</p></section>
     return "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">\n" \
            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n" \
            "<title>%s</title>\n<style>%s</style></head>\n<body><main>%s</main>\n<script>%s</script></body></html>\n" % (
-               e("Run report %s: %d of %d done" % (CFG.get("session", ""), n, m)),
+               e("Run report %s: %d of %d done" % (F.get("session") or "", n, m)),
                CSS + "@media (max-width:600px){%s}\n" % "".join(NARROW), body, JS)
 
 
@@ -530,14 +664,32 @@ var dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-sch
 r.dataset.theme=dark?'light':'dark';};document.body.appendChild(b);})();"""
 
 
+def render(rec, facts, state=None):
+    """The page for the run with these records and facts (archive.py uses it too)."""
+    use(rec, facts, state)
+    return page(gather())
+
+
 def main(argv):
-    out = R + "/report.html"
-    if argv[:1] == ["-o"] and len(argv) == 2:
-        out = argv[1]
-    elif argv:
-        sys.exit("usage: report.py [-o FILE]")
-    out = os.path.abspath(out)
-    text = page(gather())
+    out = rec = None
+    args = list(argv)
+    while args:
+        a = args.pop(0)
+        if a in ("-o", "--records") and args:
+            v = args.pop(0)
+            out, rec = (v, rec) if a == "-o" else (out, v)
+        else:
+            sys.exit(USAGE)
+    if rec is None and not os.path.isdir(R + "/state") and os.path.isfile(R + "/records/run.json"):
+        rec = R + "/records"            # the run's files are gone but its facts were kept
+    if rec is None:
+        text, default = render(R + "/records", live_facts(R), R + "/state"), R + "/report.html"
+    else:
+        rec = os.path.abspath(rec)
+        if not os.path.isdir(rec):
+            sys.exit("report: no such folder: %s" % rec)
+        text, default = render(rec, archived_facts(rec)), os.path.join(rec, "report.html")
+    out = os.path.abspath(out or default)
     tmp = out + ".tmp"
     with open(tmp, "w") as f:
         f.write(text)
