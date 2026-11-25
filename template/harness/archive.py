@@ -129,7 +129,7 @@ def status_text(verify_ok, verify_out, stopped):
               "                (stalled.*.json) and resumes after a crash (resumes.jsonl);",
               "                run.json, the run's facts (started, ended, done, agents, profiles); and",
               "                report.html, the run's page. Rebuild the page with any copy of the template:",
-              "                python3 harness/report.py --records <this folder>/records",
+              "                harness/py harness/report.py --records <this folder>/records",
               ""]
     return "\n".join(lines)
 

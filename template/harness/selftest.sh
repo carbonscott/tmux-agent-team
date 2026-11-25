@@ -4,14 +4,14 @@
 # as run-agent.sh starts it). Compare the replies with the expectations printed first. Run
 # after setup.sh and before the first launch.   usage: harness/selftest.sh [agent]   (default: the last one)
 set -u
-R=$(cd "$(dirname "$0")/.." && pwd); cd "$R"; cfg() { python3 "$R/harness/cfg.py" "$1"; }
+R=$(cd "$(dirname "$0")/.." && pwd); cd "$R"; cfg() { "$R/harness/py" "$R/harness/cfg.py" "$1"; }
 [ -e state/started ] && { echo "a run has already started here"; exit 1; }
 [ -d ws ] && [ -d harness/settings ] || { echo "run ./setup.sh first"; exit 1; }
 A=${1:-$(cfg agents | awk '{print $NF}')}
 case " $(cfg agents) " in *" $A "*) ;; *) echo "no agent $A in config.json"; exit 1;; esac
 # the neighbour whose workspace must be hidden: the first helper, unless that is the agent under test
 N=$(for x in $(cfg agents | awk '{print $2, $NF, $1}'); do [ "$x" != "$A" ] && { echo "$x"; break; }; done)
-read -r PROFILE TOOLS SLASH <<<"$(python3 "$R/harness/profiles.py" "$A")"
+read -r PROFILE TOOLS SLASH <<<"$("$R/harness/py" "$R/harness/profiles.py" "$A")"
 [ -n "${TOOLS:-}" ] || { echo "no profile for $A: check config.json (harness/profiles.py --check)"; exit 1; }
 FLAGS=(--tools "$TOOLS" --strict-mcp-config); [ "$SLASH" = slash-on ] || FLAGS+=(--disable-slash-commands)
 # the second session's steps: one for the profile's own reach, then the network request that pauses
@@ -22,14 +22,14 @@ case ",$TOOLS," in
   *,WebFetch,*) EXTRA="$S. Use the WebFetch tool on https://example.com and give the page's title."
              EXPECT="  $S  Example Domain: the WebFetch tool is offered and fetches a public page"; S=$((S+1));;
 esac
-python3 - "$R" "$A" <<'PY'
+"$R/harness/py" - "$R" "$A" <<'PY'
 import json, sys
 R, A = sys.argv[1:]
 s = json.load(open("%s/harness/settings/%s.json" % (R, A))); del s["hooks"]["Stop"]
 json.dump(s, open(R + "/state/selftest.json", "w"))
 PY
-echo '[]' > state/landed.json; python3 -c "import time;open('state/deadline','w').write(str(time.time()+3600))"
-python3 -u "$R/harness/gateway.py" > state/gw-test.log 2>&1 & GW=$!
+echo '[]' > state/landed.json; "$R/harness/py" -c "import time;open('state/deadline','w').write(str(time.time()+3600))"
+"$R/harness/py" -u "$R/harness/gateway.py" > state/gw-test.log 2>&1 & GW=$!
 trap 'kill $GW 2>/dev/null' EXIT    # never leave a test gateway behind
 sleep 1.5; kill -0 $GW 2>/dev/null || { cat state/gw-test.log; exit 1; }
 cat <<EOT
@@ -70,7 +70,7 @@ cd "$R"
 P11=FAIL; [ -e state/HALT ] && P11=PASS
 # Probe the pause directly; the agent may or may not have attempted step 12.
 DOOR=FAIL; ( cd "ws/$A" && "$R/bin/team" status 2>&1 ) | grep -q "TEAM PAUSED" && DOOR=PASS
-MON=FAIL; echo '{"tool_name":"Bash","tool_input":{"command":"ls"},"cwd":"'"$R/ws/$A"'"}' | python3 "$R/harness/hook.py" "$A" \
+MON=FAIL; echo '{"tool_name":"Bash","tool_input":{"command":"ls"},"cwd":"'"$R/ws/$A"'"}' | "$R/harness/py" "$R/harness/hook.py" "$A" \
   | grep -q '"permissionDecision": "deny"' && MON=PASS
 rm -f state/HALT
 # A second short session: what must be seen while the team is not paused.

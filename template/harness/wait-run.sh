@@ -6,7 +6,7 @@ while true; do
   [ -e "$R/state/DONE" ] && { echo "DONE"; break; }
   [ -e "$R/state/STALLED" ] && { echo "STALLED"; cat "$R/state/STALLED"; echo; break; }
   [ -e "$R/state/HALT" ] && { echo "HALT"; cat "$R/state/HALT"; break; }
-  python3 -c "import time,sys;sys.exit(0 if time.time()>float(open('$R/state/deadline').read()) else 1)" && { echo "TIME UP"; break; }
+  "$R/harness/py" -c "import time,sys;sys.exit(0 if time.time()>float(open('$R/state/deadline').read()) else 1)" && { echo "TIME UP"; break; }
   [ $(( $(date +%s) - t0 )) -ge $MAX ] && { echo "STILL RUNNING"; break; }
   sleep 5
 done

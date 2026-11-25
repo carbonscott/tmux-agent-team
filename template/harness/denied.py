@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """PermissionDenied hook: Claude Code's auto-mode classifier (the LLM action monitor)
 refused a tool call. Fail closed: record it and pause the whole team."""
 import json

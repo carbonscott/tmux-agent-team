@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """Action monitor (rule layer) + run records. PreToolUse hook: runs before every tool call.
 
   usage: hook.py <agent>          (stdin: Claude Code PreToolUse JSON)

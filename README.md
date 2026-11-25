@@ -10,7 +10,7 @@ of this up and supervises it is the **boss**.
 
 ## Requirements
 
-Linux with `tmux`, `git`, `python3`, `bwrap` (bubblewrap) and Claude Code. No Docker and no
+Linux with `tmux`, `git`, `uv`, `bwrap` (bubblewrap) and Claude Code. No Docker and no
 database server.
 
 ## Install
@@ -28,7 +28,7 @@ The skill activates only when invoked by name.
     harness/selftest.sh           # one agent session tries to break out of its sandbox
     ./launch.sh && harness/boss.sh trust
     tmux attach -t team           # watch; the "board" window shows the team's board
-    python3 harness/verify.py     # afterwards: check the result on a fresh checkout
+    harness/py harness/verify.py     # afterwards: check the result on a fresh checkout
     ./teardown.sh --archive       # stop; keep the repository and records in one dated file; clean up
 
 The example task is a seven-module Python package whose frozen tests are the statements.

@@ -28,6 +28,17 @@ has no size limit. The template has been run with four agents.
 The lead designs the tables and writes the orders. Helpers start knowing only where the
 orders are, which keeps the briefs short and shows that the board carries everything.
 
+## Python comes from uv
+
+Every script of the harness is plain Python with no packages beyond the standard library. So
+that a run does not depend on which `python3` a machine has, or on having one at all,
+`setup.sh` has `uv` make one environment, `tools/py`, and everything runs on it: the shell
+scripts call `harness/py`, the monitor's hooks name `tools/py/bin/python`, `bin/team` starts
+itself with it, and `tools/bin/python3` gives it to the agents and to the merge job's check.
+`uv` is called only at setup, never inside an agent's sandbox, so it needs no network and no
+writable cache there. When `uv` has to download a Python it goes into `tools/python`, inside the
+work directory, where the agents' sandbox and the merge job's sandbox can both read it.
+
 ## Writing a good task
 
 - **A merge must be able to pass before the whole goal does.** If the only check is global,

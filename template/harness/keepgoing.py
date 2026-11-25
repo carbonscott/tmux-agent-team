@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """Stop hook: the harness's "keep going". An agent may not stop until the finish
 line is reached (every statement on main), time runs out, the run stalls, or the team is paused."""
 import json

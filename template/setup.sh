@@ -2,13 +2,20 @@
 # One-time setup: task toolchain, central repository, one workspace per agent, agent settings.
 set -eu
 R=$(cd "$(dirname "$0")" && pwd); cd "$R"
-cfg() { python3 "$R/harness/cfg.py" "$1"; }
-for t in tmux git python3 bwrap claude; do command -v $t >/dev/null || { echo "missing: $t"; exit 1; }; done
-python3 harness/profiles.py --check || { echo "fix profile / agent_profiles in config.json"; exit 1; }
+cfg() { "$R/harness/py" "$R/harness/cfg.py" "$1"; }
+for t in tmux git uv bwrap claude; do command -v $t >/dev/null || { echo "missing: $t"; exit 1; }; done
+# checked before anything is created (harness/py runs these on a Python uv finds: tools/py comes next)
+"$R/harness/py" harness/profiles.py --check || { echo "fix profile / agent_profiles in config.json"; exit 1; }
 [ -f task/seed/STATEMENTS.md ] || { echo "task/seed/STATEMENTS.md is missing: describe the statements there"; exit 1; }
-python3 -c "import json,sys; v=json.load(open('config.json')).get('stall_min', 0)
+"$R/harness/py" -c "import json,sys; v=json.load(open('config.json')).get('stall_min', 0)
 sys.exit(0 if type(v) in (int, float) and v >= 0 else 1)" || { echo "config.json: stall_min must be a number of minutes, 0 or more (0 switches it off)"; exit 1; }
 mkdir -p records state/removed state/ci ws tools/bin
+# The work directory's own Python, set up by uv: one uv finds on this machine (3.10 or newer) or,
+# when there is none, one it downloads into tools/python. Everything below, the gateway, the
+# monitor, team and the agents' python3 run on it, so nothing depends on a system python3.
+export UV_PYTHON_INSTALL_DIR="$R/tools/python"
+[ -x tools/py/bin/python ] || uv venv -q --python '>=3.10' tools/py || { echo "uv could not set up a Python in tools/py"; exit 1; }
+for n in python python3; do printf '#!/bin/sh\nexec "%s/tools/py/bin/python" "$@"\n' "$R" > tools/bin/$n; chmod +x tools/bin/$n; done
 [ -x task/install.sh ] && [ ! -e state/installed ] && { task/install.sh; touch state/installed; }
 
 # central repository seeded with the task; direct pushes are refused
@@ -31,5 +38,5 @@ for a in $(cfg agents); do
     printf '.gw/\n/.*\n!/.gitignore\n' >> .git/info/exclude )
 done
 chmod +x bin/* harness/*.sh *.sh
-python3 harness/mk_settings.py
+"$R/harness/py" harness/mk_settings.py
 echo "setup complete. next: harness/test_gateway.sh, harness/selftest.sh, then ./launch.sh"

@@ -2,13 +2,13 @@
 # Pre-launch test of the gateway and the merge job: try what they must refuse, then reset.
 # Run after setup.sh and before the first launch.
 set -u
-R=$(cd "$(dirname "$0")/.." && pwd); cd "$R"; cfg() { python3 "$R/harness/cfg.py" "$1"; }
+R=$(cd "$(dirname "$0")/.." && pwd); cd "$R"; cfg() { "$R/harness/py" "$R/harness/cfg.py" "$1"; }
 [ -e state/started ] && { echo "a run has already started here; this test would reset its work"; exit 1; }
 [ -d ws ] && [ -d central.git ] || { echo "run ./setup.sh first"; exit 1; }
 AG=($(cfg agents)); H1=${AG[1]}; H2=${AG[2]:-}
 T=$R/bin/team; export GIT_CONFIG_GLOBAL=/dev/null
-echo '[]' > state/landed.json; python3 -c "import time;open('state/deadline','w').write(str(time.time()+3600))"
-python3 -u "$R/harness/gateway.py" > state/gw-test.log 2>&1 & GW=$!
+echo '[]' > state/landed.json; "$R/harness/py" -c "import time;open('state/deadline','w').write(str(time.time()+3600))"
+"$R/harness/py" -u "$R/harness/gateway.py" > state/gw-test.log 2>&1 & GW=$!
 trap 'kill $GW 2>/dev/null' EXIT    # never leave a test gateway behind
 sleep 1.5; kill -0 $GW 2>/dev/null || { cat state/gw-test.log; exit 1; }
 ok=0; bad=0
@@ -49,7 +49,7 @@ echo x > outside_probe.txt; git add -A; git commit -q -m "edit outside the allow
 check "a change outside the allowed paths is rejected" 'REJECTED: these paths' $T mr "outside probe"
 # With task.attempted_if, a wrong answer is rejected. Without it (a task from from-goal.py), every
 # statement is checked on every merge and a wrong answer is merged but not counted as done.
-ATT=$(python3 -c "import json; print(json.load(open('$R/config.json'))['task'].get('attempted_if') or '')")
+ATT=$("$R/harness/py" -c "import json; print(json.load(open('$R/config.json'))['task'].get('attempted_if') or '')")
 landed() { cat "$R/state/landed.json"; }
 if [ -d "$R/task/probe/bad" ] && [ -d "$R/task/probe/good" ]; then
   git reset -q --hard origin/main; cp -r "$R/task/probe/bad/." .; git add -A; git commit -q -m "bad probe"
@@ -64,7 +64,7 @@ if [ -d "$R/task/probe/bad" ] && [ -d "$R/task/probe/good" ]; then
     check "the task's right answer is accepted"      'ACCEPTED: merged into main' $T mr "good probe"
   else
     $T mr "good probe" >/dev/null 2>&1
-    check "the task's right answer is counted as done" '^counted:' python3 -c "
+    check "the task's right answer is counted as done" '^counted:' "$R/harness/py" -c "
 import json, sys; new = [s for s in json.loads(sys.argv[2]) if s not in json.loads(sys.argv[1])]
 print('counted: ' + ' '.join(new) if new else 'nothing new is done: the probe answers no statement')" "$BAD" "$(landed)"
   fi

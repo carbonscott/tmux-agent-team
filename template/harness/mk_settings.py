@@ -16,11 +16,14 @@ launch. Add machine-specific extras in config.json: extra_private_paths.
 import json
 import os
 import shutil
+import sys
 
 R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 cfg = json.load(open(R + "/config.json"))
 HOME = os.path.expanduser("~")
-PY = shutil.which("python3") or "/usr/bin/python3"
+PY = R + "/tools/py/bin/python"    # the work directory's own Python (setup.sh, through uv)
+if not os.path.exists(PY):
+    PY = sys.executable
 # What a sandboxed shell may read under the home directory's dot-entries, as paths relative to
 # it. Everything else that starts with a dot there (.ssh, .aws, .config, .gitconfig, .claude.json,
 # histories, the rest of .local and .cache, anything new) is hidden. ~/.gitconfig is among the

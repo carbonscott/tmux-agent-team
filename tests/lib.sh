@@ -21,6 +21,16 @@
 #   finish                   print the totals; the exit status is 0 only if nothing failed
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 PYTHONDONTWRITEBYTECODE=1
+# The tests' own python3 comes from uv as well (one it finds or fetches), so they run on a machine
+# with no python3: a small python3 on PATH that starts it. The stubs use it too (#!/usr/bin/env python3).
+PYBIN=$REPO/.check-cache/pybin
+if [ ! -x "$PYBIN/python3" ]; then
+  command -v uv >/dev/null || { echo "missing: uv (https://docs.astral.sh/uv/)"; exit 1; }
+  mkdir -p "$PYBIN"
+  P=$(uv run --quiet --no-project --python '>=3.10' python -c 'import sys; print(sys.executable)') || exit 1
+  printf '#!/bin/sh\nexec "%s" "$@"\n' "$P" > "$PYBIN/python3"; chmod +x "$PYBIN/python3"
+fi
+export PATH=$PYBIN:$PATH
 PASS=0; FAIL=0; GWPID=; TOP=; W=; TOPS=()
 
 ok() { echo "PASS  $1"; PASS=$((PASS+1)); }
