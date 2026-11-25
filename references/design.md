@@ -48,6 +48,7 @@ orders are, which keeps the briefs short and shows that the board carries everyt
 | Part | Status |
 |---|---|
 | Writes outside the workspace, reading other workspaces or the harness, network access, reaching tmux | Enforced for shell commands by the sandbox (tested from inside an agent session) |
+| Reading the owner's files in the home directory (`~/.claude/history.jsonl`, `~/.claude/projects/`, credentials, any dot-folder) | Enforced for shell commands by the sandbox: every entry of `~/.claude` but `shell-snapshots/` and every dot-entry of `~` but the shell's own files, `.local` and `.cache` are hidden (`mk_settings.py`, run again at every launch). Only the generated settings are tested; the stricter list has not yet been seen in a live session. The monitor also pauses the team on the bare words `.claude` and `.ssh`, which a quoted or built path can get past. |
 | Board permissions, statement time limit, atomic claims, one transaction per request | Enforced by the gateway (tested) |
 | Only checked work reaches `main`; frozen paths; no direct pushes | Enforced by the merge job (tested) |
 | A statement's own check (`task.checks`) | Enforced by the merge job and `verify.py` exactly like `task.check`; shown only by stub-based tests |

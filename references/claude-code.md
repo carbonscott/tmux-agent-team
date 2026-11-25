@@ -7,7 +7,7 @@ Check flags and settings against your own version.
 |---|---|---|
 | Separate sessions | One `claude` process per tmux window, started with the brief as its first message | `harness/run-agent.sh`, `launch.sh` |
 | Profiles | `--tools` gets the profile's list; `sealed`, `research` and `allied` add `--disable-slash-commands`, `open` leaves it out and adds `Skill`. `--strict-mcp-config` with no server keeps connectors off in every profile. The default, `sealed`, is `--tools Bash,Edit,Read,Write,Glob,Grep`: no web access, subagents, Claude Code's own cross-session messaging or connectors. Messages between agents go through the gateway instead (`team msg`) | `harness/profiles.py`, `harness/run-agent.sh` |
-| Walls | The shell sandbox, per agent: `denyRead` on the harness, records, state, task files, other workspaces and the rest of the home directory; no network domains | `harness/mk_settings.py` |
+| Walls | The shell sandbox, per agent: `denyRead` on the harness, records, state, task files, other workspaces and the rest of the home directory (every entry of `~/.claude` but `shell-snapshots/`, every dot-entry of `~` but a short list); no network domains | `harness/mk_settings.py` |
 | Door | `team` writes a request file into `.gw/req` in the workspace and waits for the reply in `.gw/resp` | `bin/team` |
 | Board | One SQLite file in `state/`, opened only by the gateway. `me()` is a SQL function the gateway binds per agent; an authorizer limits what helpers may run, and refuses every write to the gateway's own tables (`messages`, `message_reads`) | `harness/gateway.py` (`Board`) |
 | Merge job | Scratch worktree, path allowlist, the task's check inside bubblewrap with no network | `harness/gateway.py` (`do_mr`, `run_check`) |
@@ -40,9 +40,23 @@ Check flags and settings against your own version.
   what the user asked for can see that the door was authorized.
 - **Typing into a window takes two steps:** `tmux send-keys -l '<text>'`, a short pause,
   then `tmux send-keys Enter`.
-- **`setup.sh` hides the home directory** by listing every folder beside the path from the
-  home directory down to the work directory, plus common credential files. Add anything
-  else in `extra_private_paths`.
+- **`setup.sh` hides the home directory** (and `launch.sh` names it again before every launch,
+  since only entries that exist can be named): every entry beside the path from the home
+  directory down to the work directory (all of them when the work directory is elsewhere),
+  every dot-entry of `~` except `.bashrc`, `.profile`, `.bash_profile`, `.bash_logout`,
+  `.local` (user-installed programs on `PATH`) and `.cache` (tool caches), and every entry of
+  Claude Code's config folder (`~/.claude`, or `$CLAUDE_CONFIG_DIR`, as `hook.py` reads it)
+  except `shell-snapshots/`. That one must stay readable: Claude Code starts every Bash command
+  by sourcing a snapshot of the owner's shell from there (functions, options and `PATH`). An
+  entry made after the launch is not hidden. A hidden entry that is gone by the time a command
+  runs is skipped (the 2.1.332 binary says so in its sandbox log text). Add anything else in
+  `extra_private_paths`. Builds from 2.1.332 also know `sandbox.filesystem.allowRead` and
+  `denyRead` globs, which could deny the whole folder and re-allow `shell-snapshots/`, covering
+  later entries too; the template does not use them, because they have not been tried in a
+  live session. Not yet checked live: run in an agent's window
+  `c=.cla; wc -c ~/${c}ude/history.jsonl; ls -A ~/${c}ude` (spelled so that the monitor does not
+  pause the team); it must print an error or `0` for the history and list nothing but
+  `shell-snapshots`.
 - **`/goal`'s evaluator reads conversation text only.** It cannot run the check itself, so
   `verify.py` prints a statement's own check command under its `PASS` or `FAIL` line: one
   printed block then shows the command, its last output line and the verdict.

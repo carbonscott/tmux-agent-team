@@ -25,6 +25,8 @@ else
   python3 "$R/harness/runstate.py" --resume
   rm -f "$R"/state/stops.* 2>/dev/null || true
 fi
+# the sandbox can hide only what exists, so name the home directory's entries again now
+python3 "$R/harness/mk_settings.py" >/dev/null
 tmux new-session -d -s "$S" -n gateway -c "$R" "python3 -u $R/harness/gateway.py; exec bash"
 tmux set-option -t "$S" remain-on-exit on
 tmux new-window -d -t "$S" -n board -c "$R" "bash $R/harness/board.sh; exec bash"

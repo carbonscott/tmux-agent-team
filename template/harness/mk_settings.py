@@ -1,8 +1,15 @@
 """Write harness/settings/<agent>.json: the monitor hooks and the shell sandbox for each agent.
 
-Claude Code specific. The sandbox hides (denyRead) the harness, the records, the other agents'
-workspaces, the task files, and everything in the home directory that is not on the path down to this folder,
-plus the usual credential files. Add machine-specific extras in config.json: extra_private_paths.
+Claude Code specific. The sandbox hides (denyRead) the harness, the records, the state, the task
+files and the other agents' workspaces, and in the home directory everything except:
+- the folders on the path from the home directory down to this work directory (their other
+  entries are hidden; when this folder is not under the home directory, nothing is on the path);
+- SHELL_DOTS, the few dot-entries directly in the home directory that a shell needs;
+- shell-snapshots/ inside Claude Code's config folder (~/.claude, or $CLAUDE_CONFIG_DIR):
+  Claude Code starts every Bash command by sourcing a file from there. Every other entry of that
+  folder (history.jsonl, projects/, settings, credentials) is hidden.
+Only entries that exist when this runs can be named, so launch.sh runs it again before every
+launch. Add machine-specific extras in config.json: extra_private_paths.
 """
 import json
 import os
@@ -12,21 +19,37 @@ R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 cfg = json.load(open(R + "/config.json"))
 HOME = os.path.expanduser("~")
 PY = shutil.which("python3") or "/usr/bin/python3"
-CREDS = [".ssh", ".aws", ".gnupg", ".config", ".docker", ".kube", ".netrc", ".npmrc", ".pypirc",
-         ".git-credentials", ".bash_history", ".zsh_history", ".python_history", ".claude.json",
-         ".claude/.credentials.json", ".claude/projects", ".claude/settings.json", ".codex", ".copilot"]
+# Dot-entries of the home directory a sandboxed shell may read. Everything else that starts
+# with a dot there (.ssh, .aws, .config, .gitconfig, .claude.json, histories, anything new) is hidden.
+SHELL_DOTS = [".bashrc", ".profile", ".bash_profile", ".bash_logout",   # read when a shell starts
+              ".local",    # programs and Python packages installed for the user (~/.local/bin on PATH)
+              ".cache"]    # caches some tools read (uv, pip)
+CLAUDE_DIR = os.path.abspath(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(HOME, ".claude"))
+CLAUDE_KEEP = ["shell-snapshots"]   # sourced at the start of every Bash command
+
+
+def inside(p, root):
+    return p == root or p.startswith(root + os.sep)
+
+
+def hide_all_but(top, keep):
+    """The entries to hide so that nothing under top can be read except the paths in keep and
+    the folders on the way to them."""
+    if any(inside(top, k) for k in keep):
+        return []
+    if not any(inside(k, top) for k in keep) or not os.path.isdir(top):
+        return [top]
+    out = []
+    for n in sorted(os.listdir(top)):
+        out += hide_all_but(os.path.join(top, n), keep)
+    return out
 
 
 def private_paths():
-    """Siblings of every folder on the way from $HOME down to this one."""
-    out = [os.path.join(HOME, p) for p in CREDS if os.path.exists(os.path.join(HOME, p))]
-    if R.startswith(HOME + os.sep):
-        here = HOME
-        for part in os.path.relpath(R, HOME).split(os.sep):
-            for n in sorted(os.listdir(here)):
-                if n != part and not (here == HOME and n.startswith(".")):
-                    out.append(os.path.join(here, n))
-            here = os.path.join(here, part)
+    claude_keep = [os.path.join(CLAUDE_DIR, k) for k in CLAUDE_KEEP]
+    out = hide_all_but(HOME, [R] + [os.path.join(HOME, n) for n in SHELL_DOTS] + claude_keep)
+    if not inside(CLAUDE_DIR, HOME) and os.path.isdir(CLAUDE_DIR):    # $CLAUDE_CONFIG_DIR elsewhere
+        out += hide_all_but(CLAUDE_DIR, claude_keep)
     return out + list(cfg.get("extra_private_paths", []))
 
 
