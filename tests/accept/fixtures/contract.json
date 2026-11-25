@@ -1,0 +1,20 @@
+{
+  "goal": "Produce the two output files",
+  "type": "deterministic",
+  "run": "Keep working across turns toward done_when below. When all items are met, stop.",
+  "operating_mode": {
+    "role": "You are an orchestrator. Read .goal/two-files.goal_cast.md before iteration 1.",
+    "budget": "Delegate to at least 2 and at most 5 subagents per iteration.",
+    "iterations": "Complete at least 3 iterations before done_when may be considered met.",
+    "ledger": "Maintain .goal/two-files.ledger.json on disk.",
+    "claims": "Maintain .goal/two-files.claims.json on disk."
+  },
+  "done_when": [
+    "The file out/alpha.txt holds the single line ok, proven by printing the output of `grep -x ok out/alpha.txt`.",
+    "The file out/beta.txt holds the single line ok, proven by printing the output of `grep -x ok out/beta.txt`.",
+    "The final turn prints the complete contents of .goal/two-files.claims.json via cat, showing: non-empty goal and slug; at least 1 entry in claims.",
+    "This turn prints the LEDGER digest, a header line reading iterations N/3 with N at least 3, showing at least 3 completed iterations."
+  ],
+  "guardrails": ["Do not modify any file outside out/."],
+  "bound": "OR: the printed digest's header shows 9 completed iterations."
+}

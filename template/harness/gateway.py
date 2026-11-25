@@ -338,7 +338,14 @@ def handle(agent, board, req):
 def serve(agent):
     base = "%s/ws/%s/.gw" % (R, agent)
     req_dir, resp_dir = base + "/req", base + "/resp"
-    board = Board(agent)
+    for attempt in range(50):          # a locked board at start-up must not cost an agent its door
+        try:
+            board = Board(agent)
+            break
+        except sqlite3.OperationalError:
+            if attempt == 49:
+                raise
+            time.sleep(0.2)
     while True:
         try:
             names = sorted(n for n in os.listdir(req_dir) if n.endswith(".json"))
@@ -384,6 +391,12 @@ if __name__ == "__main__":
     except OSError:
         sys.exit("another gateway is already serving " + R)
     os.makedirs(STATE + "/ci", exist_ok=True)
+    # Put the board into write-ahead mode once, before the agent threads open it. When they
+    # raced to do it on a new board, the loser died with "database is locked" and that agent
+    # was never answered.
+    _init = sqlite3.connect(DBFILE, timeout=10)
+    _init.execute("PRAGMA journal_mode = WAL")
+    _init.close()
     print("gateway up for agents:", " ".join(AGENTS), flush=True)
     for a in AGENTS:
         threading.Thread(target=serve, args=(a,), daemon=True).start()

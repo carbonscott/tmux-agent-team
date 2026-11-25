@@ -5,11 +5,15 @@ cd "$R/ws/$A" || exit 1
 export PATH=$R/bin:$R/tools/bin:$PATH CLAUDE_CODE_STOP_HOOK_BLOCK_CAP=100000
 PROMPT="$(python3 "$R/harness/render.py" "$A")"
 RC=(); [ -n "${TEAM_REMOTE_CONTROL:-}" ] && RC=(--remote-control "team-$A")
+# config.json: "model" (empty means Claude Code's default) and "effort" (default medium)
+MODEL=$(python3 -c "import json;print(json.load(open('$R/config.json')).get('model') or '')")
+EFFORT=$(python3 -c "import json;print(json.load(open('$R/config.json')).get('effort') or 'medium')")
+[ -n "$MODEL" ] && RC+=(--model "$MODEL")
 # Only a shell and file tools: no web, no subagents, no messaging, no MCP servers.
 # "--" keeps the brief from being read as another tool name.
 claude --name "team-$A" "${RC[@]}" \
   --settings "$R/harness/settings/$A.json" \
-  --permission-mode auto --effort medium \
+  --permission-mode auto --effort "$EFFORT" \
   --tools Bash,Edit,Read,Write,Glob,Grep --strict-mcp-config --disable-slash-commands \
   -- "$PROMPT"
 echo "[claude exited; shell kept open so the window persists]"; exec bash

@@ -40,8 +40,8 @@ HARD_BASH = [
     (r"\bgit\s+remote\s+(?:add|set-url|rename|remove)\b", "changing git remotes"),
     (ROOTNAME + r"/(?:harness|records|state|task)\b", "touching harness, records, state or task files"),
     (r"(?:%s/ws/|\.\./)(?:%s)\b" % (ROOTNAME, "|".join(OTHERS)), "touching another agent's workspace"),
-    (r"\.claude\b|\.ssh\b|/run/user\b", "touching the agent loop or credentials"),
-    (r"\bboard\.db\b", "reaching the board directly (use `team sql`)"),
+    # a path into .claude or .ssh, not the bare word (an agent may grep for ".claude")
+    (r"/\.(?:claude|ssh)\b|(?:^|[\s=(<>])\.(?:claude|ssh)(?:/|\s|$)|/run/user\b", "touching the agent loop or credentials"),
 ]
 SOFT_BASH = [
     (r"\b(?:pip3?|uv)\s+(?:pip\s+)?install\b|\bapt(?:-get)?\s+install\b|\bnpm\s+i", "no network: nothing can be installed"),
