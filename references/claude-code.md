@@ -15,6 +15,7 @@ Check flags and settings against your own version.
 | Keep going | `Stop` hook; a timer types a reminder into the lead's window | `harness/keepgoing.py`, `harness/remind.sh` |
 | Rejoining after a crash | `launch.sh --resume` starts every agent as a new session (`run-agent.sh <id> --resume`) with the rejoining brief from `render.py --resume`; `claude --continue` is not used | `launch.sh`, `harness/runstate.py`, `docs/*-rejoin.md` |
 | Records | Hook and gateway logs in `records/`, which the sandbox hides | `harness/offline_monitor.py` |
+| Goal contracts | A make-goal contract for `/goal` becomes the task (`task.checks`); the boss may run under `/goal` with `verify.py` as its proof | `harness/from-goal.py`, `references/goal.md` |
 
 ## Quirks
 
@@ -42,6 +43,9 @@ Check flags and settings against your own version.
 - **`setup.sh` hides the home directory** by listing every folder beside the path from the
   home directory down to the work directory, plus common credential files. Add anything
   else in `extra_private_paths`.
+- **`/goal`'s evaluator reads conversation text only.** It cannot run the check itself, so
+  `verify.py` prints a statement's own check command under its `PASS` or `FAIL` line: one
+  printed block then shows the command, its last output line and the verdict.
 - **`WebFetch` may be missing from a session.** On Claude Code 2.1.331 a session started with
   `--tools Bash,WebSearch,WebFetch,Agent,Skill` reported Agent, Bash, Skill and WebSearch,
   and no WebFetch; pages were fetched by a `web-fetch` subagent, which needs `Agent`. The
