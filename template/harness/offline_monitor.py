@@ -30,6 +30,8 @@ hhmm = lambda t: time.strftime("%H:%M:%S", time.localtime(t))
 
 print("== profiles: " + " ".join("%s=%s" % (a, (CFG.get("agent_profiles") or {}).get(a) or CFG.get("profile") or "sealed")
                                  for a in AGENTS))
+if CFG.get("sandbox", True) is False:
+    print("== UNWALLED run: the shell sandbox was off, so a shell could act outside what these records show")
 sub = collections.Counter(a["agent"] for a in acts if a.get("subagent"))
 if sub:
     print("== tool calls made inside subagents: " + ", ".join("%s %d" % kv for kv in sorted(sub.items())))

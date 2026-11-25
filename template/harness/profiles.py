@@ -6,8 +6,13 @@
 
 config.json: "profile" is the team's default (sealed if absent); "agent_profiles" maps an agent
 name to a profile and overrides the default for that agent. The shell has no network in every
-profile: the sandbox allows no domain, and the monitor (hook.py) pauses the team on a Bash call
-that asks for one (allowed_domains). The monitor refuses every tool a profile does not grant.
+profile but remote: the sandbox allows no domain, and the monitor (hook.py) pauses the team on a
+Bash call that asks for one (allowed_domains) or runs a network command (ssh, curl, ...). The
+monitor refuses every tool a profile does not grant.
+
+remote is open plus a shell that may run the network commands in NET_CMDS. It is allowed only
+in an unwalled run ("sandbox": false), where the shell has the network anyway; with the sandbox
+on those commands could not reach anything, so --check refuses it.
 """
 import json
 import os
@@ -21,7 +26,11 @@ PROFILES = {
     "research": (SEALED + ["WebSearch", "WebFetch"], False),
     "allied": (SEALED + ["WebSearch", "WebFetch", "Agent"], False),
     "open": (SEALED + ["WebSearch", "WebFetch", "Agent", "Skill"], True),
+    "remote": (SEALED + ["WebSearch", "WebFetch", "Agent", "Skill"], True),
 }
+# The shell commands that reach other machines which the monitor passes only in the remote profile
+NET_CMDS = ["ssh", "scp", "sftp", "rsync", "curl", "wget"]
+
 
 
 def load_cfg():
@@ -37,8 +46,17 @@ def tools_of(cfg, agent):
     return PROFILES[profile_of(cfg, agent)][0]
 
 
+def sandbox_on(cfg):
+    """config.json "sandbox": true (the default, also when absent) keeps every agent's shell in
+    Claude Code's sandbox; false runs the team unwalled (see mk_settings.py). Only exactly false
+    turns it off, so a bad value never opens the walls (problems() refuses it before setup)."""
+    return cfg.get("sandbox", True) is not False
+
+
 def problems(cfg):
     out = []
+    if type(cfg.get("sandbox", True)) is not bool:
+        out.append("sandbox must be true or false, not %s" % json.dumps(cfg.get("sandbox")))
     if cfg.get("profile", "sealed") not in PROFILES:
         out.append("profile %r is not one of: %s" % (cfg.get("profile"), ", ".join(PROFILES)))
     for a, p in (cfg.get("agent_profiles") or {}).items():
@@ -46,6 +64,10 @@ def problems(cfg):
             out.append("agent_profiles names %r, which is not in agents" % a)
         if p not in PROFILES:
             out.append("agent_profiles gives %s the profile %r, which is not one of: %s" % (a, p, ", ".join(PROFILES)))
+    remote = [a for a in cfg["agents"] if profile_of(cfg, a) == "remote"]
+    if remote and sandbox_on(cfg):
+        out.append("the remote profile (%s) needs the sandbox off: set \"sandbox\": false, and read what an "
+                   "unwalled run gives up in SKILL.md" % ", ".join(remote))
     return out
 
 

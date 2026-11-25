@@ -5,7 +5,7 @@
 #                               then wait to see each session running, and say so
 #   boss.sh say <id|all> "..."  type a message into an agent's window
 #   boss.sh slash <id> "/..."   type a slash command, as it is, into the window of an agent on the open
-#                               profile (the way to put it under /goal: boss.sh slash h3 "/goal ...")
+#                               or remote profile (the way to put it under /goal: boss.sh slash h3 "/goal ...")
 #   boss.sh messages            every message the agents sent each other (team msg), oldest first
 #   boss.sh resume              clear a reviewed pause and give the lost time back (to the deadline and the stall clock)
 #   boss.sh unstall             reopen a stalled run: the stall clock starts again from now
@@ -18,6 +18,10 @@ case "${1:-status}" in
   status) p "$R"
           "$R/harness/py" "$R/harness/board.py" --brief
           p "profiles: $("$R/harness/py" "$R/harness/profiles.py" --list)"
+          w=$("$R/harness/py" -c 'import json, sys
+if json.load(open(sys.argv[1])).get("sandbox", True) is False:
+    print("== UNWALLED run: the shell sandbox is off (config.json \"sandbox\": false); the walls are only requested")' "$R/config.json")
+          [ -n "$w" ] && p "$w"
           st=$("$R/harness/py" "$R/harness/runstate.py"); case "$st" in INTERRUPTED*|ended*) p "== $st";; esac
           [ -e "$R/state/HALT" ] && { p "blocked action:"; "$R/harness/py" -m json.tool "$R/state/HALT"; }; true;;
   trust)  # waits up to 30 s: for each prompt to appear (so it can be run right after launch), and,
@@ -46,11 +50,11 @@ case "${1:-status}" in
           for a in $sent; do p "$a: answered, but the session was not seen running: look at the window"; done
           [ -n "${todo// /}" ] && p "still starting, run again:$todo";;
   messages) "$R/harness/py" "$R/harness/board.py" --messages;;
-  slash)  # no "[boss]" prefix, so the session reads it as a command: only for the open profile,
-          # where slash commands are on, and only one printable line that starts with /
+  slash)  # no "[boss]" prefix, so the session reads it as a command: only for a profile where
+          # slash commands are on (open, remote), and only one printable line that starts with /
           case " $(cfg agents) " in *" ${2:-?} "*) ;; *) p "refused: no agent ${2:-} (one agent, by name)"; exit 1;; esac
-          p=$("$R/harness/py" "$R/harness/profiles.py" "$2" | cut -d' ' -f1)
-          [ "$p" = open ] || { p "refused: $2 has the $p profile; slash commands are on only in the open profile (config.json agent_profiles)"; exit 1; }
+          pl=$("$R/harness/py" "$R/harness/profiles.py" "$2"); p=${pl%% *}
+          [ "$(echo "$pl" | cut -d" " -f3)" = slash-on ] || { p "refused: $2 has the $p profile; slash commands are on only in the open and remote profiles (config.json agent_profiles)"; exit 1; }
           [ -e "$R/state/removed/$2" ] && { p "refused: $2 has been removed"; exit 1; }
           "$R/harness/py" -c 'import sys; s = sys.argv[1]; sys.exit(0 if s.startswith("/") and s.isprintable() else 1)' "${3:-}" ||
             { p "refused: give one line of printable text that starts with /, such as \"/goal ...\""; exit 1; }

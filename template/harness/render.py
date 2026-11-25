@@ -60,4 +60,25 @@ for key, value in {
     "{CHECK}": check,
 }.items():
     text = text.replace(key, value)
+# An unwalled run: the Sandbox limit above describes walls this run does not have. Say so, and that
+# its rules still hold (the monitor checks them), so no agent reads "no network" as a fact here.
+if cfg.get("sandbox", True) is False:
+    tail += ("\n## This run is unwalled\n\n"
+             "The owner turned the shell sandbox off for this run (config.json `\"sandbox\": false`). The "
+             "Sandbox limit above is no longer a wall: your shell can technically reach the network and "
+             "files outside your workspace. The rules still hold all the same. Keep to your workspace, use "
+             "only `team` for the board and `main`, and use no network unless your profile below says so. "
+             "The action monitor still checks every command and pauses the team on a violation.\n")
+# An agent on the remote profile (only in a run with the sandbox off) may reach other machines:
+# its brief says so, and which of the limits above still hold.
+if ((cfg.get("agent_profiles") or {}).get(agent) or cfg.get("profile")) == "remote":
+    tail += ("\n## Remote machines\n\n"
+             "Your profile is `remote`. This run's shell sandbox is off, and your shell may reach other "
+             "machines: you may run `ssh`, `scp`, `sftp`, `rsync`, `curl`, `wget` and the `bridge` CLI. That "
+             "replaces the limits above only for those commands, and only for the machines your task "
+             "names. Never connect back to this machine with them (`localhost`, its own name): that pauses "
+             "the team. Do not give a shell command `allowed_domains`: it is refused, since the network is "
+             "already open. Every other rule above still holds: your workspace only, no `tmux`, `claude`, "
+             "`sudo` or `git push`, nothing under `.ssh`, `.claude`, the harness, the records or the state. "
+             "Write what you do on a remote machine in the board, so the team and the boss can follow it.\n")
 print(text.rstrip("\n") + "\n" + tail)

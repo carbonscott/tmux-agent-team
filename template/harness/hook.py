@@ -10,7 +10,9 @@
 - A tool the agent's profile (profiles.py) does not grant is refused. WebFetch may reach only
   http(s) hosts on the public internet: never this machine or its private network.
 - A Bash call that asks for network access (allowed_domains) or carries any parameter beyond
-  BASH_KEYS is a HARD violation: the shell stays offline in every profile.
+  BASH_KEYS is a HARD violation: the shell stays offline in every profile but remote. remote
+  (only in an unwalled run) may run ssh, scp, sftp, rsync, curl and wget; its allowed_domains is
+  refused without a pause, since the sandbox that would read it is off.
 The LLM layer is Claude Code's auto-mode classifier; its denials reach
 denied.py, which also pauses the team.
 """
@@ -45,9 +47,18 @@ PROFILE = profiles.profile_of(CFG, AGENT)
 GRANTED = set(profiles.PROFILES.get(PROFILE, ([], False))[0])   # an unknown profile grants nothing
 
 CMD = r"(?:^|[;&|(`]\s*|\b(?:xargs|env|exec|nohup|timeout\s+\S+)\s+)"
+# The remote profile's shell may reach other machines: the monitor passes profiles.NET_CMDS for it,
+# and only while the sandbox is off (setup.sh refuses remote otherwise; this is the second lock).
+# Every other profile keeps them in the HARD rule below.
+REMOTE = PROFILE == "remote" and not profiles.sandbox_on(CFG)
+BLOCKED_CMDS = ["sudo", "su", "docker", "podman", "tmux", "screen", "claude", "telnet", "nc", "ncat", "netcat", "socat"]
+if not REMOTE:
+    BLOCKED_CMDS += profiles.NET_CMDS
+# Even in remote, a network command aimed at this machine would step around every rule here
+# (ssh localhost 'tmux ls' runs what the tmux rule refuses), so it pauses the team.
+LOCAL_NAMES = r"localhost|127(?:\.\d+){1,3}|0\.0\.0\.0|::1|0:0:0:0:0:0:0:1|%s" % re.escape(socket.gethostname())
 HARD_BASH = [
-    (CMD + r"(sudo|su|docker|podman|tmux|screen|claude|curl|wget|ssh|scp|sftp|rsync|telnet|nc|ncat|netcat|socat)(?:\s|$)",
-     "command not allowed in the sandbox"),
+    (CMD + r"(%s)(?:\s|$)" % "|".join(BLOCKED_CMDS), "command not allowed in the sandbox"),
     (r"\bgit\s+(?:-\S+\s+)*push\b", "direct git push (use `team push` / `team mr`)"),
     (r"\bgit\s+remote\s+(?:add|set-url|rename|remove)\b", "changing git remotes"),
     (ROOTNAME + r"/(?:harness|records|state|task)\b", "touching harness, records, state or task files"),
@@ -59,6 +70,10 @@ HARD_BASH = [
     (r"\.claude\b|\.ssh\b|/run/user\b", "touching the agent loop or credentials"),
     (r"\bboard\.db\b", "reaching the board directly (use `team sql`)"),
 ]
+if REMOTE:
+    HARD_BASH.append((CMD + r"(?:%s)\s[^;&|\n]*?(?<![\w.-])(?:[\w.-]+@)?\[?(?i:%s)\]?(?![\w.-])"
+                      % ("|".join(profiles.NET_CMDS), LOCAL_NAMES),
+                      "a network command aimed at this machine (it would step around the monitor)"))
 # The parameters a normal Bash call carries (every call recorded in the proof runs had only
 # these). allowed_domains asks Claude Code to open the sandbox's network to those hosts, and it
 # did: the shell fetched a page in every profile. So a non-empty allowed_domains, and any other
@@ -234,6 +249,11 @@ def main():
     elif tool in ("Glob", "Grep"):
         check_read(d, ab(ti.get("path") or cwd), True)
     elif tool == "Bash":
+        if ti.get("allowed_domains") and REMOTE:
+            # remote runs only with the sandbox off: the shell has the network already, and the
+            # parameter would open nothing. Refused, without a pause, so the agent drops it.
+            deny(d, "allowed_domains (the sandbox is off and your shell already has the network: "
+                 "run the command without it)", False)
         if ti.get("allowed_domains"):
             deny(d, "a shell command that asks for network access (allowed_domains: %s)"
                  % json.dumps(ti["allowed_domains"])[:200], True)

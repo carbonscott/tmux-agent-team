@@ -5,7 +5,7 @@ R=$(cd "$(dirname "$0")" && pwd); cd "$R"
 cfg() { "$R/harness/py" "$R/harness/cfg.py" "$1"; }
 for t in tmux git uv bwrap claude; do command -v $t >/dev/null || { echo "missing: $t"; exit 1; }; done
 # checked before anything is created (harness/py runs these on a Python uv finds: tools/py comes next)
-"$R/harness/py" harness/profiles.py --check || { echo "fix profile / agent_profiles in config.json"; exit 1; }
+"$R/harness/py" harness/profiles.py --check || { echo "fix profile / agent_profiles / sandbox in config.json"; exit 1; }
 [ -f task/seed/STATEMENTS.md ] || { echo "task/seed/STATEMENTS.md is missing: describe the statements there"; exit 1; }
 "$R/harness/py" -c "import json,sys; v=json.load(open('config.json')).get('stall_min', 0)
 sys.exit(0 if type(v) in (int, float) and v >= 0 else 1)" || { echo "config.json: stall_min must be a number of minutes, 0 or more (0 switches it off)"; exit 1; }

@@ -65,6 +65,7 @@ Settings in `config.json`:
 | `task.attempted_if` | Optional path, with `{name}`. A statement is checked once this path exists, and from then on it must pass or the merge is rejected. Without this setting every statement is checked on every merge, and a merge is rejected only if it breaks a statement that was already done. |
 | `task.allowed_paths` | Regular expressions. A merge may change only paths that match one of them. Everything else is frozen. |
 | `task.toolchain_paths` | Extra directories the check must be able to read, beyond `/usr` and `tools/` |
+| `sandbox` | `true` (the default, also when absent) runs every agent's shell in Claude Code's sandbox. `false` turns it off for the whole run: see "Unwalled runs" below. Any other value makes `setup.sh` fail. |
 | `extra_private_paths` | More paths to hide from the agents |
 | `extra_readable_home_paths` | Paths under the home directory's dot-folders to leave readable, beyond the short built-in list (for example `.cargo/bin`). Everything else there is hidden. |
 
@@ -103,18 +104,40 @@ tool the profile does not grant. Choose the smallest profile the task needs.
 | `research` | `sealed` plus `WebSearch`, `WebFetch` | Agents must read documentation or look things up | The team is no longer offline. A page can carry instructions to the agent, and what the agent puts in a search or URL leaves the machine. |
 | `allied` | `research` plus `Agent` (subagents) | An agent has large reading or search jobs to hand off | A subagent works out of the agent's sight. Its tool calls pass the monitor and the sandbox like the agent's own (shown live); its report comes back through `SubagentHandback`, which the monitor passes on `allied` and `open` (not yet re-shown live) |
 | `open` | `allied` plus `Skill`; slash commands on | An agent should run its own `/goal` or `/loop`, or use skills | The agent sees your installed skills, and `/loop` and `/goal` add a second control loop beside the harness's own |
+| `remote` | `open` plus a shell that may run `ssh`, `scp`, `sftp`, `rsync`, `curl`, `wget` (and the `bridge` CLI). Only with `"sandbox": false`; `setup.sh` refuses it otherwise | An agent must work on another machine (an HPC host through `bridge` or SSH) | Everything an unwalled run gives up, plus: the agent acts on other machines, where nothing here watches it, and can send anything it can read there. The monitor still refuses these commands aimed at this machine (`localhost`, its own name). Tested with stubs only |
 
-In every profile: the shell has no network (the sandbox allows no domain, and a Bash call that asks
-for one with `allowed_domains` pauses the team), connectors (MCP servers) are off, a pause refuses
+In every profile but `remote`: the shell has no network (the sandbox allows no domain, and a Bash
+call that asks for one with `allowed_domains` or runs `ssh`, `curl` and the like pauses the team;
+in an unwalled run only that monitor rule is left, so it is requested, not enforced).
+In every profile: connectors (MCP servers) are off, a pause refuses
 every tool call, `tmux` and `claude` stay blocked, and only the merge job moves `main`.
 `WebFetch` may fetch only `http` and `https` pages on the public internet; a URL for this
 machine, its private network or a file pauses the team. On Claude Code 2.1.331 a `research`
 session has the `WebFetch` tool itself; where `Agent` is present (`allied`, `open`) Claude Code
 drops it and fetches pages through a `web-fetch` subagent, whose fetches the monitor checks the
 same way. `harness/boss.sh status` lists each agent as `<agent>=<profile>`. An agent cannot
-start `/goal` itself (Claude Code treats it as a command typed by a person); put an `open` agent
-under `/goal` with `harness/boss.sh slash <id> "/goal <condition>"`, which `references/goal.md`
+start `/goal` itself (Claude Code treats it as a command typed by a person); put an `open` or
+`remote` agent under `/goal` with `harness/boss.sh slash <id> "/goal <condition>"`, which `references/goal.md`
 explains. Not yet shown live. `references/design.md` says what is enforced.
+
+#### Unwalled runs (`"sandbox": false`)
+
+Use `"sandbox": false` only when the user asks for it, for work that must reach other machines
+(SSH, the `bridge` CLI). Tell the user what it gives up before you set it. With the sandbox off:
+
+- The monitor, the gateway, the merge job and the profiles work as before, and the merge job's
+  check still runs in its own sandbox.
+- Nothing but the monitor's rules keeps an agent away from the harness, the board file,
+  `main`, the other workspaces, the pause flag, the records, the owner's home directory and the
+  network. Those rules read the command text; a script the agent writes and then runs is not
+  looked into. Every "Enforced by the sandbox" row in `references/design.md` becomes
+  "Requested" for this run; its section "An unwalled run" lists them.
+
+`setup.sh` and `launch.sh` print a warning, `boss.sh status` prints an `unwalled` line, and the
+run's page and the archive's `STATUS.txt` say `unwalled`. `selftest.sh` skips its wall steps
+(3 to 7 and 13) and its `allowed_domains` step (with the sandbox off Claude Code offers no such
+parameter), and tests only the monitor. Each agent's brief gains a section saying the run is unwalled. A resumed run reads `config.json` again: do not
+change the flag before `--resume`.
 
 ### 3. Set up
 

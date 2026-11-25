@@ -9,6 +9,8 @@ S=$(cfg session); MODE=${1:-}
 case "$MODE" in ""|--resume) ;; *) echo "usage: ./launch.sh [--resume]"; exit 2;; esac
 tmux has-session -t "=$S" 2>/dev/null && { echo "tmux session $S already exists"; exit 1; }
 [ -d "$R/ws" ] || { echo "run ./setup.sh first"; exit 1; }
+# config.json may have changed since setup (before a resume, say): check it again
+"$R/harness/py" "$R/harness/profiles.py" --check || { echo "fix profile / agent_profiles / sandbox in config.json. Nothing was started."; exit 1; }
 STATE=$("$R/harness/py" "$R/harness/runstate.py")
 if [ -z "$MODE" ]; then
   case "$STATE" in
@@ -26,7 +28,8 @@ else
   rm -f "$R"/state/stops.* 2>/dev/null || true
 fi
 # the sandbox can hide only what exists, so name the home directory's entries again now
-"$R/harness/py" "$R/harness/mk_settings.py" >/dev/null
+OUT=$("$R/harness/py" "$R/harness/mk_settings.py")
+grep -A9 '^WARNING' <<<"$OUT" || true   # an unwalled run says so on every launch
 tmux new-session -d -s "$S" -n gateway -c "$R" "$R/harness/py -u $R/harness/gateway.py; exec bash"
 tmux set-option -t "$S" remain-on-exit on
 tmux new-window -d -t "$S" -n board -c "$R" "bash $R/harness/board.sh; exec bash"

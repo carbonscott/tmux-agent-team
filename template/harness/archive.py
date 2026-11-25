@@ -75,6 +75,7 @@ def status_text(verify_ok, verify_out, stopped):
     except (OSError, ValueError):
         got = []
     finished = len(got) == len(STATEMENTS)
+    walled = CFG.get("sandbox", True) is not False
     head = "%s run, stopped %s, %d of %d done, %s" % ("finished" if finished else "abandoned", when(stopped),
                                                        len(got), len(STATEMENTS),
                                                        "verified" if verify_ok else "not verified")
@@ -101,6 +102,7 @@ def status_text(verify_ok, verify_out, stopped):
         "work directory:   %s (the run's files there were deleted)" % R,
         "agents:           %s" % " ".join(CFG["agents"]),
         "budget:           %s min" % CFG.get("budget_min"),
+        "sandbox:          %s" % ("on" if walled else "off (an unwalled run: config.json \"sandbox\": false)"),
         "started:          %s" % (when(read(STATE + "/started")) if read(STATE + "/started") else "never launched"),
         "stopped:          %s" % when(stopped),
         "finished at:      %s" % (when(read(STATE + "/DONE")) if "DONE" in flags else "-"),
@@ -115,6 +117,11 @@ def status_text(verify_ok, verify_out, stopped):
         "resumes:          %d" % len([r for r in resumes if r.strip()]),
         "messages:         %d (team msg; each is in records/gateway.jsonl)" % sent,
     ]
+    if not walled:
+        lines += ["", "UNWALLED RUN: the agents' shells ran without the sandbox. They could reach the network, the",
+                  "home directory and the run's own files (board, records, checks, other workspaces); the walls",
+                  "were requests that the monitor checked call by call, not enforced. Read the records with that",
+                  "in mind (references/design.md, \"An unwalled run\")."]
     if "HALT" in flags:
         lines += ["", "The team was paused when it stopped. The blocked action:", read(STATE + "/HALT")[:2000]]
     lines += ["", "harness/verify.py when the archive was made (%s):" % ("passed" if verify_ok else "failed")]
@@ -127,7 +134,8 @@ def status_text(verify_ok, verify_out, stopped):
               "                (merges.jsonl) of the run, every message (gateway.jsonl, op msg), any",
               "                reviewed pauses (halt.*.json), stalls reopened with boss.sh unstall",
               "                (stalled.*.json) and resumes after a crash (resumes.jsonl);",
-              "                run.json, the run's facts (started, ended, done, agents, profiles); and",
+              "                run.json, the run's facts (started, ended, done, agents, profiles,",
+              "                sandbox); and",
               "                report.html, the run's page. Rebuild the page with any copy of the template:",
               "                harness/py harness/report.py --records <this folder>/records",
               ""]
