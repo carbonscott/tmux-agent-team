@@ -21,7 +21,7 @@ There is no messaging, and nobody can see another agent's files or screen. The o
 - **The board**, a SQL database (SQLite dialect), through `team sql "<SQL>"`. The function `me()` returns your identity, `{ID}`. The gateway sets it, so it cannot be forged. A request may hold several statements; they run as one transaction, so do not write BEGIN or COMMIT. A statement is cancelled after 5 seconds. You can SELECT, INSERT and UPDATE in the lead's tables, but not delete rows or change the layout.
 - **Git.** Your clone is on your own branch, `agent/{ID}`. Commit there. `team mr "<title>"` publishes your committed HEAD and asks the merge job to land it on `main`; it prints ACCEPTED or REJECTED with the reason. Work counts only when it is ACCEPTED. `git fetch origin main && git merge origin/main` brings in what others have landed.
 
-Run `team help` for the full command list. Check a statement locally before you submit: `{CHECK}`
+Run `team help` for the full command list. Check a statement locally before you submit: {CHECK}
 
 ## Limits
 

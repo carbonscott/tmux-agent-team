@@ -211,8 +211,15 @@ def do_push(agent):
     return 0, msg, head
 
 
+def check_command(name):
+    """The shell command that checks one statement: its own entry in task.checks, used as it
+    is, or else task.check with {name} filled in."""
+    own = (TASK.get("checks") or {}).get(name)
+    return own if own else TASK["check"].format(name=name)
+
+
 def run_check(tree, name):
-    """Run the task's check for one statement inside a throwaway root: system directories and
+    """Run the check for one statement inside a throwaway root: system directories and
     tools/ read-only, the merged tree writable at /work, no network. Linux (bubblewrap)."""
     cmd = ["bwrap", "--ro-bind", "/usr", "/usr"]
     for d in ("/lib", "/lib64", "/lib32", "/bin", "/sbin"):
@@ -227,7 +234,7 @@ def run_check(tree, name):
     cmd += ["--bind", tree, "/work", "--chdir", "/work", "--unshare-net", "--unshare-pid", "--unshare-ipc",
             "--die-with-parent", "--new-session", "--setenv", "HOME", "/tmp", "--setenv", "PYTHONDONTWRITEBYTECODE", "1",
             "--setenv", "PATH", R + "/tools/bin:/usr/local/bin:/usr/bin:/bin",
-            "sh", "-c", TASK["check"].format(name=name)]
+            "sh", "-c", check_command(name)]
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=TASK.get("check_timeout_s", 180))
         return p.returncode == 0, (p.stdout + p.stderr).strip()[-2000:]

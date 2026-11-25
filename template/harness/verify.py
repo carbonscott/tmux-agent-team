@@ -22,6 +22,8 @@ try:
     for s in gw.STATEMENTS:
         ok, out = gw.run_check(tree, s)
         print("%s  %-16s %s" % ("PASS" if ok else "FAIL", s, (out.splitlines() or [""])[-1][:80]))
+        if (gw.TASK.get("checks") or {}).get(s):    # a statement's own check: show what was run
+            print("      check: %s" % gw.check_command(s))
         bad += 0 if ok else 1
     seed = open(R + "/state/seed_sha").read().strip()
     changed = subprocess.run(["git", "diff", "--name-only", seed, "HEAD"], cwd=tree, capture_output=True, text=True).stdout.split()
