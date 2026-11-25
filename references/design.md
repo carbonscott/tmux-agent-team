@@ -55,9 +55,32 @@ orders are, which keeps the briefs short and shows that the board carries everyt
 | Agents isolated from the boss's account | Not enforced. All sessions run as one OS user with one login. The sandbox confines their shell commands; the agent processes themselves are outside it. |
 | Putting a run away | `teardown.sh --archive` keeps only the repository, the records and `STATUS.txt`, writes beside the work directory and never into it, refuses to overwrite, and deletes nothing until the file has been read back. Tested with the stub tmux only; never used on a real run. Nothing stops a boss from leaving a run's files lying around instead. |
 | Honest results | A test suite is a weaker check than a proof. The merge job limits which paths change; it does not inspect what the code does. |
+| Tools outside the agent's profile | Enforced twice: the session is started with only the profile's tools (`--tools`), and the monitor refuses any other tool. Tested with stubs only. |
+| `WebFetch` only to public `http(s)` hosts | Enforced by fixed rules in `hook.py` (scheme, user names in URLs, loopback, link-local, private and other non-global addresses in any spelling, local-only names, and names that resolve to such an address within 2 s). A name that does not resolve in time is passed, and a name whose address changes between the check and the fetch is not caught. Tested with stubs only. |
+| Pages read by `research`, `allied` and `open` agents | Not checked. A page can carry instructions; the monitor judges the agent's next action, not what it read. |
+| Tool calls made inside a subagent (`allied`, `open`) | Unproven. If the `PreToolUse` hook fires for them, they are checked like any other call and recorded with a `subagent` field (`offline_monitor.py` counts them). If it does not, a subagent's calls are limited only by the session's tools and the shell sandbox. |
+| Skills and slash commands (`open`) | Each skill call passes the monitor and is recorded; the team skill itself is refused. What a skill then asks for goes through the monitor call by call. `/loop` and `/goal` are a second loop beside the Stop hook: they can keep an agent busy, never let it past a pause, a removal or the merge job. |
+| Connectors (MCP servers) | Off in every profile (`--strict-mcp-config`, no server given). A connector acts outside the shell sandbox with its own credentials, and the monitor cannot judge what it does. |
 
-Not yet exercised in any run: splitting a task, moving a helper between crews, the
+Not yet exercised in any run: any profile other than `sealed` (only stub-based tests have
+started one), WebFetch through a `web-fetch` subagent, splitting a task, moving a helper between crews, the
 five-minute reminder, a slow check, a helper dying mid-task, and teams larger than four.
+
+## Profiles
+
+The sealed team is the default because every wall in it has been tested from inside a
+session. Each wider profile adds one kind of reach and keeps every wall of the narrower
+one: the shell sandbox is identical in all four (no network domains), and the monitor
+refuses whatever the profile does not grant. The profiles are a fixed list of four in
+`harness/profiles.py`; a custom profile in `config.json` was left out so that each
+combination the monitor sees has been thought through. Add one there if you need it.
+
+What still holds in `open`: the monitor sees every tool call the main session makes, a pause
+refuses them all (skills included), `tmux` and `claude` are blocked in the shell, and only
+the merge job moves `main`. What does not: the agent sees the owner's installed skills, a
+skill brings its own instructions into the session, and `/loop` or `/goal` can keep an
+agent working on its own schedule. The Stop hook still refuses to let it stop early, and
+still lets it stop when the run is over.
 
 ## Adapting it
 

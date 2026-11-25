@@ -26,6 +26,12 @@ def load(name):
 acts, gw, merges = load("actions.jsonl"), load("gateway.jsonl"), load("merges.jsonl")
 hhmm = lambda t: time.strftime("%H:%M:%S", time.localtime(t))
 
+print("== profiles: " + " ".join("%s=%s" % (a, (CFG.get("agent_profiles") or {}).get(a) or CFG.get("profile") or "sealed")
+                                 for a in AGENTS))
+sub = collections.Counter(a["agent"] for a in acts if a.get("subagent"))
+if sub:
+    print("== tool calls made inside subagents: " + ", ".join("%s %d" % kv for kv in sorted(sub.items())))
+
 print("== tool calls checked: %d" % len(acts))
 by = collections.Counter((a["agent"], a["tool"]) for a in acts)
 dec = collections.Counter((a["agent"], a["decision"]) for a in acts)

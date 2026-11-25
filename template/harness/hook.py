@@ -8,14 +8,23 @@
   (fail-closed) until the boss reviews it.
 - SOFT violation: deny only (the thing is simply not available in the sandbox).
 - While HALT exists, or the agent has been removed, everything is denied.
+- A tool the agent's profile (profiles.py) does not grant is refused. WebFetch may reach only
+  http(s) hosts on the public internet: never this machine or its private network.
 The LLM layer is Claude Code's auto-mode classifier; its denials reach
 denied.py, which also pauses the team.
 """
+import ipaddress
 import json
 import os
 import re
+import socket
 import sys
+import threading
 import time
+import urllib.parse
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import profiles  # noqa: E402
 
 R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CFG = json.load(open(R + "/config.json"))
@@ -31,6 +40,8 @@ SENSITIVE = [R + "/harness", R + "/records", R + "/state", R + "/task", HOME + "
 if os.environ.get("CLAUDE_CONFIG_DIR"):
     SENSITIVE.append(os.path.realpath(os.environ["CLAUDE_CONFIG_DIR"]))
 READ_OK = [WS, R + "/bin", R + "/docs", R + "/tools", R + "/central.git"]
+PROFILE = profiles.profile_of(CFG, AGENT)
+GRANTED = set(profiles.PROFILES.get(PROFILE, ([], False))[0])   # an unknown profile grants nothing
 
 CMD = r"(?:^|[;&|(`]\s*|\b(?:xargs|env|exec|nohup|timeout\s+\S+)\s+)"
 HARD_BASH = [
@@ -74,6 +85,8 @@ def record(d, decision, reason=""):
     small = {k: (v if not isinstance(v, str) else v[:4000]) for k, v in ti.items()}
     rec = dict(ts=round(time.time(), 3), agent=AGENT, session=d.get("session_id"), tool=d.get("tool_name"),
                input=small, decision=decision, reason=reason)
+    if d.get("agent_id") or d.get("agent_type"):     # the call came from inside a subagent
+        rec["subagent"] = d.get("agent_type") or d.get("agent_id")
     with open(R + "/records/actions.jsonl", "a") as f:
         f.write(json.dumps(rec) + "\n")
 
@@ -120,6 +133,63 @@ def check_write(d, path):
     deny(d, "writes are limited to your workspace (%s)" % path, False)
 
 
+def as_ip(host):
+    """The address a host names, if it is written as one. inet_aton also reads the short and
+    numeric forms (127.1, 2130706433, 0x7f.0.0.1) that a fetcher may accept."""
+    try:
+        return ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    try:
+        return ipaddress.IPv4Address(socket.inet_aton(host))
+    except (OSError, ValueError):
+        return None
+
+
+def resolve(host, limit=2.0):
+    """Best effort: the addresses a name resolves to, or [] if that takes longer than limit."""
+    found = []
+
+    def look():
+        try:
+            for info in socket.getaddrinfo(host, None):
+                ip = as_ip(info[4][0].split("%")[0])
+                if ip is not None:
+                    found.append(ip)
+        except (OSError, UnicodeError):
+            pass
+    t = threading.Thread(target=look, daemon=True)
+    t.start()
+    t.join(limit)
+    return list(found)
+
+
+def local_host(host):
+    """True for this machine and its private network: loopback, link-local (the cloud metadata
+    address), private ranges, and names that are only meaningful here."""
+    h = host.lower().rstrip(".")
+    if not h or h == "localhost" or h.endswith((".localhost", ".local", ".internal", ".lan", ".home.arpa")):
+        return True
+    if h == socket.gethostname().lower():
+        return True
+    ip = as_ip(h)
+    if ip is not None:
+        return not ip.is_global
+    return any(not a.is_global for a in resolve(h))
+
+
+def check_url(d, url):
+    if re.search(r"[\\\s\x00-\x1f]", url):
+        deny(d, "WebFetch of a URL with backslashes, spaces or control characters", True)
+    u = urllib.parse.urlsplit(url)
+    if u.scheme.lower() not in ("http", "https"):
+        deny(d, "WebFetch of a %s: URL (only http and https)" % (u.scheme or "relative"), True)
+    if "@" in u.netloc:
+        deny(d, "WebFetch of a URL with a user name in it", True)
+    if local_host(u.hostname or ""):
+        deny(d, "WebFetch of %s, which is this machine or its private network" % (u.hostname or url), True)
+
+
 def main():
     d = json.load(sys.stdin)
     tool, ti = d.get("tool_name", ""), d.get("tool_input") or {}
@@ -142,6 +212,8 @@ def main():
     def ab(p):
         return p if os.path.isabs(p) else os.path.join(cwd, p)
 
+    if tool not in GRANTED:
+        deny(d, "tool %s (not in the %s profile)" % (tool, PROFILE), False)
     if tool in ("Edit", "Write", "NotebookEdit"):
         check_write(d, ab(ti.get("file_path") or ti.get("notebook_path") or ""))
     elif tool == "Read":
@@ -156,7 +228,11 @@ def main():
         for rx, why in SOFT_BASH:
             if re.search(rx, cmd, re.M):
                 deny(d, why, False)
-    else:
+    elif tool == "WebFetch":
+        check_url(d, str(ti.get("url") or ""))
+    elif tool == "Skill" and re.search(r"tmux-agent-team", str(ti.get("skill") or ""), re.I):
+        deny(d, "the team skill: an agent may not start another team", False)
+    elif tool not in ("WebSearch", "Agent", "Skill"):
         deny(d, "tool %s" % tool, False)
     record(d, "pass")
 

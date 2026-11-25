@@ -10,6 +10,7 @@ R=$(cd "$(dirname "$0")/.." && pwd); cfg() { python3 "$R/harness/cfg.py" "$1"; }
 say() { tmux send-keys -t "=$S:$1" -l "[boss] $2"; sleep 0.5; tmux send-keys -t "=$S:$1" Enter; }
 case "${1:-status}" in
   status) python3 "$R/harness/board.py" --brief
+          echo "profiles: $(python3 "$R/harness/profiles.py" --list)"
           [ -e "$R/state/HALT" ] && { echo "blocked action:"; python3 -m json.tool "$R/state/HALT"; };;
   trust)  # waits up to 20 s for the prompts to appear, so it can be run right after launch
           todo=" $(cfg agents) "
