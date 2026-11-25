@@ -30,7 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import profiles  # noqa: E402
 
 R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CFG = json.load(open(R + "/config.json"))
+CFG = profiles.load_cfg()   # notes keys given twice, so a profile there resolves to nothing
 AGENT = sys.argv[1]
 OTHERS = [a for a in CFG["agents"] if a != AGENT]
 WS = "%s/ws/%s" % (R, AGENT)
@@ -43,18 +43,22 @@ SENSITIVE = [R + "/harness", R + "/records", R + "/state", R + "/task", HOME + "
 if os.environ.get("CLAUDE_CONFIG_DIR"):
     SENSITIVE.append(os.path.realpath(os.environ["CLAUDE_CONFIG_DIR"]))
 READ_OK = [WS, R + "/bin", R + "/docs", R + "/tools", R + "/central.git"]
-PROFILE = profiles.profile_of(CFG, AGENT)
-GRANTED = set(profiles.PROFILES.get(PROFILE, ([], False))[0])   # an unknown profile grants nothing
+try:   # the one resolver (profiles.resolve): a profile that does not resolve grants nothing, not even Read
+    _PROF = profiles.resolve(CFG, AGENT)
+except Exception:
+    _PROF = None
+PROFILE = _PROF["label"] if _PROF else "invalid"
+GRANTED = set(_PROF["tools"]) if _PROF else set()
 
 CMD = r"(?:^|[;&|(`]\s*|\b(?:xargs|env|exec|nohup|timeout\s+\S+)\s+)"
-# The remote profile's shell may reach other machines: the monitor passes profiles.NET_CMDS for it,
-# and only while the sandbox is off (setup.sh refuses remote otherwise; this is the second lock).
-# Every other profile keeps them in the HARD rule below.
-REMOTE = PROFILE == "remote" and not profiles.sandbox_on(CFG)
+# A profile with the shell_net knob (the remote preset, or any knob set with it) may reach other
+# machines: the monitor passes profiles.NET_CMDS for it, and only while the sandbox is off (setup.sh
+# refuses shell_net otherwise; this is the second lock). Every other profile keeps them in the HARD rule below.
+REMOTE = bool(_PROF and _PROF["shell_net"]) and not profiles.sandbox_on(CFG)
 BLOCKED_CMDS = ["sudo", "su", "docker", "podman", "tmux", "screen", "claude", "telnet", "nc", "ncat", "netcat", "socat"]
 if not REMOTE:
     BLOCKED_CMDS += profiles.NET_CMDS
-# Even in remote, a network command aimed at this machine would step around every rule here
+# Even with shell_net, a network command aimed at this machine would step around every rule here
 # (ssh localhost 'tmux ls' runs what the tmux rule refuses), so it pauses the team.
 LOCAL_NAMES = r"localhost|127(?:\.\d+){1,3}|0\.0\.0\.0|::1|0:0:0:0:0:0:0:1|%s" % re.escape(socket.gethostname())
 HARD_BASH = [
@@ -250,7 +254,7 @@ def main():
         check_read(d, ab(ti.get("path") or cwd), True)
     elif tool == "Bash":
         if ti.get("allowed_domains") and REMOTE:
-            # remote runs only with the sandbox off: the shell has the network already, and the
+            # shell_net runs only with the sandbox off: the shell has the network already, and the
             # parameter would open nothing. Refused, without a pause, so the agent drops it.
             deny(d, "allowed_domains (the sandbox is off and your shell already has the network: "
                  "run the command without it)", False)

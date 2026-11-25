@@ -27,6 +27,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import profiles  # noqa: E402
 import runclock  # noqa: E402
 
 R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -116,8 +117,7 @@ def live_facts(root, stopped=None):
     f = dict(session=cfg.get("session"), agents=cfg["agents"], statements=cfg["task"]["statements"],
              budget_min=cfg.get("budget_min"), stall_min=cfg.get("stall_min"),
              sandbox=cfg.get("sandbox", True) is not False,     # False: an unwalled run
-             profiles={a: (cfg.get("agent_profiles") or {}).get(a) or cfg.get("profile") or "sealed"
-                       for a in cfg["agents"]},
+             profiles={a: profiles.label_of(cfg, a) for a in cfg["agents"]},   # labels: sealed, custom(web), reader(web)
              started=num(st + "/started"), deadline=num(st + "/deadline"), done_at=num(st + "/DONE"),
              heartbeat=num(st + "/heartbeat"), landed=landed if isinstance(landed, list) else [],
              stalled=stalled, halt=jfile(st + "/HALT"),

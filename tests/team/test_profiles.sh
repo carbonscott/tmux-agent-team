@@ -75,7 +75,7 @@ check "an agent can be given sealed explicitly" "$DENY" hook lead WebSearch '{"q
 mk_workdir lead h1; setcfg profile '"wide-open"'
 out=$(cd "$W" && ./setup.sh 2>&1); rc=$?
 [ $rc -ne 0 ] && ok "setup.sh refuses an unknown team profile" || no "setup.sh refuses an unknown team profile" "$out"
-check "and says which setting is wrong" "profile 'wide-open'" echo "$out"
+check "and says which setting is wrong" "profile.*[\"']wide-open[\"']" echo "$out"
 check "and stops before it creates anything" '^$' sh -c "ls -d '$W/ws' '$W/central.git' 2>/dev/null"
 mk_workdir lead h1; setcfg agent_profiles '{"h9": "research"}'
 check "setup.sh refuses a profile for an agent that is not on the team" "not in agents" sh -c "cd '$W' && ./setup.sh"

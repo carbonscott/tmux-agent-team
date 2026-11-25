@@ -4,8 +4,8 @@
 #   boss.sh trust               answer "yes" to the workspace trust prompt in every agent window (waits for it),
 #                               then wait to see each session running, and say so
 #   boss.sh say <id|all> "..."  type a message into an agent's window
-#   boss.sh slash <id> "/..."   type a slash command, as it is, into the window of an agent on the open
-#                               or remote profile (the way to put it under /goal: boss.sh slash h3 "/goal ...")
+#   boss.sh slash <id> "/..."   type a slash command, as it is, into the window of an agent whose profile has
+#                               the skills knob (open, remote, or a knob set with it; e.g. boss.sh slash h3 "/goal ...")
 #   boss.sh messages            every message the agents sent each other (team msg), oldest first
 #   boss.sh resume              clear a reviewed pause and give the lost time back (to the deadline and the stall clock)
 #   boss.sh unstall             reopen a stalled run: the stall clock starts again from now
@@ -51,10 +51,10 @@ if json.load(open(sys.argv[1])).get("sandbox", True) is False:
           [ -n "${todo// /}" ] && p "still starting, run again:$todo";;
   messages) "$R/harness/py" "$R/harness/board.py" --messages;;
   slash)  # no "[boss]" prefix, so the session reads it as a command: only for a profile where
-          # slash commands are on (open, remote), and only one printable line that starts with /
+          # slash commands are on (the skills knob), and only one printable line that starts with /
           case " $(cfg agents) " in *" ${2:-?} "*) ;; *) p "refused: no agent ${2:-} (one agent, by name)"; exit 1;; esac
           pl=$("$R/harness/py" "$R/harness/profiles.py" "$2"); p=${pl%% *}
-          [ "$(echo "$pl" | cut -d" " -f3)" = slash-on ] || { p "refused: $2 has the $p profile; slash commands are on only in the open and remote profiles (config.json agent_profiles)"; exit 1; }
+          [ "$(echo "$pl" | cut -d" " -f3)" = slash-on ] || { p "refused: $2 has the $p profile, without the skills knob; slash commands are on only where the skills knob is on (the open and remote presets, or a knob object with \"skills\": true in config.json agent_profiles)"; exit 1; }
           [ -e "$R/state/removed/$2" ] && { p "refused: $2 has been removed"; exit 1; }
           "$R/harness/py" -c 'import sys; s = sys.argv[1]; sys.exit(0 if s.startswith("/") and s.isprintable() else 1)' "${3:-}" ||
             { p "refused: give one line of printable text that starts with /, such as \"/goal ...\""; exit 1; }

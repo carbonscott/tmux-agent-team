@@ -48,6 +48,11 @@ Four agents finish it in about two minutes.
 | `references/claude-code.md` | Which Claude Code feature implements each part, and its quirks |
 | `references/goal.md` | A make-goal contract as the team's task, and the boss under `/goal` |
 
+What each agent may use is a profile: four knobs (`web`, `subagents`, `skills`, `shell_net`)
+that `config.json` can set per agent, with the named profiles (`sealed`, the default, then
+`research`, `allied`, `open`, `remote`) as presets. The shell sandbox stays one setting for the
+whole team. `references/decisions/knobs.md` tests whether composing knobs weakens the hardening.
+
 Your own task plugs in through `template/task/` and the `task` section of
 `template/config.json`: a list of statements, one check command (or one per statement), and the paths agents may
 change. Nothing else in the template is specific to the example.
