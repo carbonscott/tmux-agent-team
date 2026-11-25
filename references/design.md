@@ -53,6 +53,7 @@ orders are, which keeps the briefs short and shows that the board carries everyt
 | Authorship of board rows | A helper's rows default to its own name, and every request is logged under the true sender. A helper can still type another name into a column; the log shows who really wrote it. |
 | Removing a helper | The gateway and monitor refuse it. Reopening its tasks is left to the lead. Never exercised. |
 | Agents isolated from the boss's account | Not enforced. All sessions run as one OS user with one login. The sandbox confines their shell commands; the agent processes themselves are outside it. |
+| Putting a run away | `teardown.sh --archive` keeps only the repository, the records and `STATUS.txt`, writes beside the work directory and never into it, refuses to overwrite, and deletes nothing until the file has been read back. Tested with the stub tmux only; never used on a real run. Nothing stops a boss from leaving a run's files lying around instead. |
 | Honest results | A test suite is a weaker check than a proof. The merge job limits which paths change; it does not inspect what the code does. |
 
 Not yet exercised in any run: splitting a task, moving a helper between crews, the
@@ -85,6 +86,22 @@ session. Headless sessions also work without it, but give up the live view and t
 For a very large team, a database server with one account per agent is the stronger board.
 An earlier version of this repository used Postgres in Docker that way; it is kept under
 the git tag `postgres-docker`.
+
+## Putting a run away
+
+A finished or abandoned run leaves two kinds of file. The repository and the records have
+lasting value: one is the work, the other the audit. The workspaces, the board, the tools
+and the settings do not, and they are worse than useless afterwards, because they look
+live. A later boss session that searches the work directory and finds a board saying "h2
+owns intervals" may act on it. The agents are not at risk: they cannot read `records/` or
+`state/`.
+
+So `./teardown.sh --archive` seals the two lasting parts into one dated file outside the
+work directory, puts a plain status line on top (`abandoned run, stopped 14:41, 4 of 7
+done, not verified`), and then deletes the rest. "Verified" is judged by running
+`verify.py` when the archive is made, not taken from the merge job's word. `--purge`
+remains for runs with nothing to keep; it is not offered where unverified work may be
+lost, such as after a crash.
 
 ## Lessons from building it
 

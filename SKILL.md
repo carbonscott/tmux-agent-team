@@ -108,8 +108,10 @@ Paused agents do not restart by themselves; the `say` step is required. Do not c
 1. **Check the result yourself:** `python3 harness/verify.py`. It clones `main` into a fresh directory, runs the check for every statement, and confirms the frozen files are unchanged. Every line must say PASS.
 2. **Review the records:** `python3 harness/offline_monitor.py`. It lists every blocked or refused action, every failed board request and every rejected merge. Failed reads of `announce` at the very start are helpers arriving before the lead; they are harmless.
 3. **Hand back the result.** It is the `main` branch of `<work dir>/central.git`.
-4. **Stop the team:** `./teardown.sh`. It ends with "nothing from this run is still running" once every agent session has exited. Agents stop by themselves within a minute or two of the finish, so there is no need to wait for them first. Add `--purge` to delete the run's files as well.
+4. **Stop the team and put the run away:** `./teardown.sh --archive [DIR]`. It stops everything, runs `verify.py` once more, writes one sealed file `team-archive-<session>-<YYYYmmdd>-<HHMMSS>.tar.gz` into DIR (default: the folder that holds the work directory), deletes the run's files from the work directory, and prints `archived: <full path>` as its last line. The file holds only `central.git` (the result: `git clone central.git <dir>`), `records/` and `STATUS.txt`, whose first line says what the run came to, for example `abandoned run, stopped 2026-11-25 14:41:07 UTC, 4 of 7 done, not verified`. It deletes nothing unless the file was written and read back. Its output says "nothing from this run is still running" once every agent session has exited. Agents stop by themselves within a minute or two of the finish, so there is no need to wait for them first.
 5. **Report to the user:** whether every statement is done and how you checked, each pause and what you decided, each prompt you answered for them, and anything still running.
+
+**Archive or purge.** Archive by default, and always when any work is unverified or the run did not finish: the archive keeps the work and the audit, and nothing else. A run's files left in the work directory hold a stale board that a later session can mistake for live state, so do not leave them lying around either. Purge (`./teardown.sh --purge`) only a run with nothing worth keeping, such as a trial launch, or once its result has been handed back and checked elsewhere: it deletes the repository and the records for good. A plain `./teardown.sh` stops the run and keeps every file, for when you mean to look before deciding.
 
 ## Commands
 
@@ -122,7 +124,7 @@ Paused agents do not restart by themselves; the `say` step is required. Do not c
 | `harness/boss.sh status / trust / say <id or all> "<text>" / resume / remove <id> / end` | The boss's controls |
 | `python3 harness/verify.py` | Checks every statement on a fresh checkout of `main` |
 | `python3 harness/offline_monitor.py` | Summary of the run's records |
-| `./teardown.sh [--purge]` | Stops the session and the gateway; with `--purge`, deletes the run's files |
+| `./teardown.sh [--archive [DIR] \| --purge]` | Stops the session and the gateway; `--archive` seals the repository and records into one dated file in DIR and then deletes the run's files; `--purge` deletes them without keeping anything |
 | `team help` | What agents can do: `whoami`, `status`, `sql`, `push`, `mr`, `wait` |
 
 ## If something goes wrong
