@@ -43,6 +43,30 @@ for cls, track, pad in (("done", 460, 8), ("num", 260, 10)):
 print("\n".join(bad) or "ok")
 PY
 }
+# Tables at phone width: every table must give each labelled column's header to its cells there
+labelled() { python3 - "$1" <<'PY'
+import json, re, sys
+page = open(sys.argv[1]).read()
+narrow = ""
+for m in re.finditer(r"@media \(max-width:600px\)\{", page):     # each block, to its matching brace
+    depth, i = 1, m.end()
+    while depth and i < len(page):
+        depth += {"{": 1, "}": -1}.get(page[i], 0)
+        i += 1
+    narrow += page[m.end():i]
+bad, n = [], 0
+for t in re.findall(r"<table[^>]*>.*?</table>", page, re.S):
+    n += 1
+    m = re.match(r'<table class="(t-[\w-]+)"', t)
+    if not m:
+        bad.append("a table without a name: %s" % t[:60])
+        continue
+    for i, h in enumerate(re.findall(r"<th>([^<]*)</th>", t)):
+        if h and ".%s td:nth-child(%d)" % (m.group(1), i + 1) not in narrow:
+            bad.append("%s: column %r has no rule for phone width" % (m.group(1), h))
+print("\n".join(bad) or ("ok" if n else "no tables"))
+PY
+}
 # contrast of text on its background, light and dark theme, for the rules named:  contrast FILE 'selector' ...
 contrast() { python3 - "$@" <<'PY'
 import re, sys
@@ -175,6 +199,7 @@ check "text on green (statement chips, done labels) has 4.5:1 contrast in both t
   contrast "$TOP/r.html" '.chips li.on' '.m.done'
 check "the state word (COMPLETE, STALLED, PAUSED, RUNNING) has 4.5:1 contrast in both themes" '^ok$' \
   contrast "$TOP/r.html" '.good .s' '.bad .s' '.warn .s' '.live .s'
+check "at phone width every table cell is shown with its column's name" '^ok$' labelled "$TOP/r.html"
 # running time: 50 min on the wall, less a reviewed pause (5 min) and the time down before a resume (10 min)
 python3 -c "
 import json, time; b = int(time.time()) - 4000

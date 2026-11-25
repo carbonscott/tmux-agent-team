@@ -294,15 +294,30 @@ def timeline(g):
                 clock(t0), span(total)))
 
 
-def table(head, rows, empty):
+NARROW = []    # rules for phone width, one set per table; table() adds them, page() puts them in the style
+
+
+def table(head, rows, empty, name, first=None, wide=()):
+    """A table, and how it reads on a phone: each row becomes a block in which every cell is
+    labelled with its column's header, column `first` (unlabelled) leads, and the `wide` columns
+    take a line of their own. The headers are fixed strings of this file, never record text."""
     if not rows:
         return '<p class="muted">%s</p>' % e(empty)
-    return ('<div class="scroll"><table><thead><tr>%s</tr></thead><tbody>%s</tbody></table></div>' % (
-        "".join("<th>%s</th>" % e(h) for h in head),
+    sel = ".t-" + name
+    for i, h in enumerate(head):
+        if i == first:
+            NARROW.append("%s td:nth-child(%d){order:-1;flex-basis:100%%;font-weight:600}" % (sel, i + 1))
+        elif h:
+            NARROW.append("%s td:nth-child(%d)::before{content:%s}" % (sel, i + 1, json.dumps(h + " ")))
+        if i in wide:
+            NARROW.append("%s td:nth-child(%d){flex-basis:100%%}" % (sel, i + 1))
+    return ('<div class="scroll"><table class="t-%s"><thead><tr>%s</tr></thead><tbody>%s</tbody></table></div>' % (
+        name, "".join("<th>%s</th>" % e(h) for h in head),
         "".join("<tr>%s</tr>" % "".join("<td>%s</td>" % c for c in r) for r in rows)))
 
 
 def page(g):
+    del NARROW[:]
     state, tone = state_of(g)
     n, m = len(g["landed"]), len(STATEMENTS)
     t0 = g["started"]
@@ -412,20 +427,23 @@ msgs: sent / received.</p></section>
         facts="".join("<div><dt>%s</dt><dd>%s</dd></div>" % (e(k), e(v)) for k, v in facts),
         events='<ul class="events">%s</ul>' % "".join(events) if events else "",
         tl=timeline(g),
-        merges=table(["time", "since start", "agent", "title", "made done", "files"], merges, "No merge accepted yet."),
-        rej=table(["time", "since start", "agent", "title", "reason"], rej, "No merge request rejected."),
+        merges=table(["time", "since start", "agent", "title", "made done", "files"], merges, "No merge accepted yet.",
+                     "merges", first=3),
+        rej=table(["time", "since start", "agent", "title", "reason"], rej, "No merge request rejected.", "rejected",
+                  first=3, wide=(4,)),
         people=table(["agent", "profile", "tool calls", "refused", "blocked", "board", "merged", "rejected", "msgs",
-                      "first", "last", ""], people, "No agents."),
+                      "first", "last", ""], people, "No agents.", "agents", first=0),
         pauses=table(["paused", "cleared", "length", "agent", "by", "tool", "blocked action", "reason"], pauses,
-                     "The team was never paused."),
-        removals=table(["time", "since start", "agent"], removals, "Nobody was removed."),
+                     "The team was never paused.", "pauses", wide=(6, 7)),
+        removals=table(["time", "since start", "agent"], removals, "Nobody was removed.", "removals"),
         resumes=table(["resumed", "down for", "last beat before", "time given back", "new deadline", "notes"], resumes,
-                      "The run was never resumed after a crash."),
-        pairs=table(["from", "to", "messages"], pairs, "No messages."))
+                      "The run was never resumed after a crash.", "resumes", wide=(5,)),
+        pairs=table(["from", "to", "messages"], pairs, "No messages.", "messages"))
     return "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">\n" \
            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n" \
            "<title>%s</title>\n<style>%s</style></head>\n<body><main>%s</main>\n<script>%s</script></body></html>\n" % (
-               e("Run report %s: %d of %d done" % (CFG.get("session", ""), n, m)), CSS, body, JS)
+               e("Run report %s: %d of %d done" % (CFG.get("session", ""), n, m)),
+               CSS + "@media (max-width:600px){%s}\n" % "".join(NARROW), body, JS)
 
 
 # Text on green uses --okbg/--onok, and state words their own --*t colours: each pair is at least
@@ -495,11 +513,14 @@ padding:0 4px;margin-right:3px;font-size:.72rem}.dkey span{color:var(--mut)}
 .k.act{background:var(--act);border-radius:1px;opacity:.6}.k.pause{background:var(--pause);border-radius:2px}
 .k.down{background:var(--down);border-radius:2px}.k.gone{background:var(--down);border-radius:2px}
 .k.stall{border-left:2px dashed var(--no);border-radius:0;width:2px}
-#theme{position:fixed;top:10px;right:10px;background:var(--card);color:var(--fg);border:1px solid var(--line);
+#theme{position:absolute;top:10px;right:10px;background:var(--card);color:var(--fg);border:1px solid var(--line);
 border-radius:16px;padding:3px 10px;font:inherit;font-size:.8rem;cursor:pointer}
 @media (max-width:600px){main{padding:12px 10px 40px}.tl{--who:3rem}.big .n{font-size:1.7rem}header{padding-right:56px}}
 @media (max-width:600px){.m.done{display:none}.m.num{display:block}.dkey{display:flex}
 .lane.run .track{height:calc(var(--nrows,1) * 20px + 8px)}.tick.odd{display:none}}
+@media (max-width:600px){.scroll table,.scroll tbody,.scroll td{display:block}.scroll thead{display:none}
+.scroll tr{display:flex;flex-wrap:wrap;gap:1px 14px;padding:7px 0;border-bottom:1px solid var(--line)}
+.scroll td{border:0;padding:0}.scroll td:empty{display:none}.scroll td::before{color:var(--mut);font-size:.78rem}}
 @media print{#theme{display:none}}
 """.replace("DARK", DARK)
 
