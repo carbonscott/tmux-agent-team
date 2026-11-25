@@ -405,4 +405,28 @@ check "H the table lists all 11 rejections" '^11$' sh -c "grep -cE '^\| [0-9]+\.
 check "H the decision is kept" 'team precheck' cat "$D"
 fi
 
+# ---- DONE: once every statement is on main, nothing more lands
+if want DONE; then
+mk_workdir lead h1 h2; setup_wd
+setcfg task.check '"sleep 1; grep -qx ok out/{name}.txt"'
+launch >/dev/null 2>&1; start_gateway
+land h1 a >/dev/null 2>&1; land h1 b >/dev/null 2>&1
+# h2 prepares an extra change; h1 completes the run while h2's request waits for the merge lock
+as h2 sh -c 'git fetch -q origin main && git merge -q --no-edit origin/main >/dev/null 2>&1; mkdir -p out; echo ok > out/extra.txt; git add out; git commit -q -m extra'
+( land h1 c > "$TOP/c.out" 2>&1 ) & pc=$!
+sleep 0.5; as h2 team mr "late extra" > "$TOP/late.out" 2>&1; rc=$?
+wait $pc
+check "DONE the last statement completes the run" 'RUN COMPLETE' cat "$TOP/c.out"
+[ $rc -ne 0 ] && grep -q 'RUN COMPLETE' "$TOP/late.out" && ok "DONE a merge that waited for the lock while the run completed is refused" || no "DONE a merge that waited for the lock while the run completed is refused" "$rc $(cat "$TOP/late.out")"
+M=$(git -C "$W/central.git" rev-parse main); n=$(wc -l < "$W/records/merges.jsonl")
+out=$(as h2 team mr "later still" 2>&1); rc=$?
+[ $rc -ne 0 ] && grep -q 'main is closed' <<<"$out" && ok "DONE team mr after RUN COMPLETE is refused" || no "DONE team mr after RUN COMPLETE is refused" "$rc $out"
+check "DONE team precheck after RUN COMPLETE is refused" 'RUN COMPLETE' as h2 team precheck
+[ "$(git -C "$W/central.git" rev-parse main)" = "$M" ] && [ "$(wc -l < "$W/records/merges.jsonl")" = "$n" ] && ok "DONE main and the merge records do not move" || no "DONE main and the merge records do not move"
+refute "DONE out/extra.txt never reached main" . sh -c "git -C '$W/central.git' show main:out/extra.txt 2>/dev/null"
+check "DONE status still answers" 'RUN COMPLETE' as h2 team status
+check "DONE the board still answers" '^1$' as h2 team sql "SELECT 1 AS one"
+check "DONE design.md says main closes at RUN COMPLETE" 'is closed once the run is complete' cat "$REPO/references/design.md"
+fi
+
 finish

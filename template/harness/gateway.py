@@ -6,7 +6,8 @@ outside its own workspace (the shell sandbox and the action-monitor hook forbid 
 
 Relays:  sql    -> the shared SQLite board; me() returns the caller's identity
          push   -> central.git refs/heads/agent/<id>   (own branch only)
-         mr     -> merge job: lands on main only if the task's check accepts it
+         mr     -> merge job: lands on main only if the task's check accepts it, until the run is
+                   complete (state/DONE): then main is closed, and mr and precheck are refused
          precheck -> the merge job's verdict on the caller's HEAD, without landing it
          msg    -> a message to one agent or to all, stored in the board's `messages` table
          inbox  -> the caller's messages; unread ones are marked read
@@ -105,6 +106,10 @@ def stall_msg():
     s = stalled() or {}
     return ("STALLED: no merge was accepted for %s min (stall_min), so the run has ended. Work on main stays. "
             "Stop working." % s.get("stall_min", "?"))
+
+
+CLOSED = ("RUN COMPLETE: every statement is on main, so main is closed: nothing more lands, and the merge "
+          "job gives no more verdicts. You may stop.")
 
 
 def landed():
@@ -390,6 +395,8 @@ def do_mr(agent, title):
     with MERGE_LOCK:
         if stalled() is not None:
             return 1, msg + "\nREJECTED: " + stall_msg()
+        if os.path.exists(STATE + "/DONE"):      # the run completed while this request waited
+            return 3, msg + "\nREJECTED: " + CLOSED
         _, main = git("rev-parse", "refs/heads/main", cwd=CENTRAL)
         if git("merge-base", "--is-ancestor", head, main, cwd=CENTRAL)[0] == 0:
             return 1, msg + "\nREJECTED: nothing new, your HEAD is already contained in main."
@@ -611,6 +618,8 @@ def handle(agent, board, req):
         return 0, status_text(agent) + ("\nunread messages: %d (read them: team inbox)" % n if n else ""), op
     if op == "inbox":
         return do_inbox(board, bool(req.get("all")))
+    if op in ("mr", "precheck") and os.path.exists(STATE + "/DONE"):
+        return 3, CLOSED, op
     left = time_left()
     if left is not None and left <= 0 and op in ("sql", "push", "mr", "msg", "precheck"):
         return 3, "TIME IS UP: the run has ended. Stop working.", op

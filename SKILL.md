@@ -174,7 +174,7 @@ When the machine restarts or the tmux session dies, the run is not lost: the boa
 
 ### 7. Finish
 
-1. **Check the result yourself:** `python3 harness/verify.py`. It clones `main` into a fresh directory, runs the check for every statement, and confirms the frozen files are unchanged. Every line must say PASS.
+1. **Check the result yourself:** `python3 harness/verify.py`. It clones `main` into a fresh directory, runs the check for every statement, and confirms the frozen files are unchanged. Every line must say PASS. Once the run is complete `main` is closed (the gateway refuses `team mr`), so what you check is what you hand back.
 2. **Review the records:** `python3 harness/offline_monitor.py`. It lists every blocked or refused action, every failed board request and every rejected merge. Failed reads of `announce` at the very start are helpers arriving before the lead; they are harmless. `harness/boss.sh messages` prints what the agents said to each other with `team msg`; read it for pressure, coaching or work done outside the board.
 3. **Write the run's page:** `python3 harness/report.py`. It writes one self-contained HTML page, `report.html` in the work directory (`-o FILE` for another place), and prints `report: <full path>` as its last line. The page shows how much is done, the running time (pauses and time down do not count), a timeline of the run to scale, every accepted and rejected merge, each agent's numbers and profile, and every pause, removal, resume, stall and message count. It also works during a run, as a fuller view than `boss.sh status`. Step 5 keeps the final page in the archive.
 4. **Hand back the result.** It is the `main` branch of `<work dir>/central.git`.
