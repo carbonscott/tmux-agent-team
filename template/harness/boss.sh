@@ -4,7 +4,8 @@
 #   boss.sh trust               answer "yes" to the workspace trust prompt in every agent window (waits for it)
 #   boss.sh say <id|all> "..."  type a message into an agent's window
 #   boss.sh messages            every message the agents sent each other (team msg), oldest first
-#   boss.sh resume              clear a reviewed pause and give the lost time back
+#   boss.sh resume              clear a reviewed pause and give the lost time back (to the deadline and the stall clock)
+#   boss.sh unstall             reopen a stalled run: the stall clock starts again from now
 #   boss.sh remove <id>         remove a helper: the gateway and the monitor refuse it from now on
 #   boss.sh end                 end the run now
 R=$(cd "$(dirname "$0")/.." && pwd); cfg() { python3 "$R/harness/cfg.py" "$1"; }; S=$(cfg session)
@@ -33,10 +34,19 @@ case "${1:-status}" in
   say)    if [ "$2" = all ]; then for a in $(cfg agents); do say "$a" "$3"; done; else say "$2" "$3"; fi;;
   resume) python3 -c "
 import json,time
-h=json.load(open('$R/state/HALT')); d=float(open('$R/state/deadline').read())
-open('$R/state/deadline','w').write(str(d+time.time()-h['ts']))" &&
+h=json.load(open('$R/state/HALT')); lost=time.time()-h['ts']
+for f, need in (('deadline', True), ('stall_from', False)):
+    try:
+        v=float(open('$R/state/'+f).read())
+    except OSError:
+        if need: raise
+        continue
+    open('$R/state/'+f,'w').write(str(v+lost))" &&
           mv "$R/state/HALT" "$R/records/halt.$(date +%s).json" &&
           echo "pause cleared. Agents that stopped will not restart by themselves: boss.sh say all \"...\"";;
+  unstall) [ -e "$R/state/STALLED" ] || { echo "the run has not stalled"; exit 1; }
+          date +%s > "$R/state/stall_from" && mv "$R/state/STALLED" "$R/records/stalled.$(date +%s).json" &&
+          echo "stall cleared; the stall clock starts again. Agents that stopped will not restart by themselves: boss.sh say all \"...\"";;
   remove) touch "$R/state/removed/$2" && echo "$2 removed. Ask the lead to reopen its tasks.";;
   end)    python3 -c "import time;open('$R/state/deadline','w').write(str(time.time()))"; echo "run ended";;
   *)      sed -n 2,10p "$0";;

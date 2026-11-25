@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """Stop hook: the harness's "keep going". An agent may not stop until the finish
-line is reached (every statement on main), time runs out, or the team is paused."""
+line is reached (every statement on main), time runs out, the run stalls, or the team is paused."""
 import json
 import os
 import sys
@@ -11,7 +11,7 @@ STATE = R + "/state"
 AGENT = sys.argv[1]
 json.load(sys.stdin)
 
-if os.path.exists(STATE + "/DONE") or os.path.exists(STATE + "/HALT") \
+if os.path.exists(STATE + "/DONE") or os.path.exists(STATE + "/HALT") or os.path.exists(STATE + "/STALLED") \
         or os.path.exists("%s/removed/%s" % (STATE, AGENT)):
     sys.exit(0)
 try:

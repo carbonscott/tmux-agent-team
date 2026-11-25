@@ -19,7 +19,7 @@ if [ -z "$MODE" ]; then
     complete*|ended*) echo "This work directory holds a run that is $STATE"
                   echo "Put it away with ./teardown.sh --archive before starting another. Nothing was started."; exit 1;;
   esac
-  rm -f "$R"/state/DONE "$R"/state/HALT "$R"/state/stops.* "$R"/state/removed/* 2>/dev/null || true
+  rm -f "$R"/state/DONE "$R"/state/STALLED "$R"/state/HALT "$R"/state/stops.* "$R"/state/removed/* 2>/dev/null || true
   [ -e "$R/state/landed.json" ] || echo '[]' > "$R/state/landed.json"
 else
   python3 "$R/harness/runstate.py" --resume
@@ -31,7 +31,7 @@ tmux new-window -d -t "$S" -n board -c "$R" "bash $R/harness/board.sh; exec bash
 if [ -z "$MODE" ]; then
   sleep 1
   python3 -c "import time;open('$R/state/deadline','w').write(str(time.time()+$(cfg budget_min)*60))"
-  date +%s > "$R/state/started"
+  date +%s > "$R/state/started"; cp "$R/state/started" "$R/state/stall_from"   # stall clock: see stall_min
 fi
 for a in $(cfg agents); do
   # a helper the boss removed stays removed: it gets no window and the gateway still refuses it

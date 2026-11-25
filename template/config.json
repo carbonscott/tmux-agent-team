@@ -2,6 +2,7 @@
   "session": "team",
   "agents": ["lead", "h1", "h2", "h3"],
   "budget_min": 45,
+  "stall_min": 30,
   "model": "",
   "effort": "medium",
   "sql_timeout_s": 5,

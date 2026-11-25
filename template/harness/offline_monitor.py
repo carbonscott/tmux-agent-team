@@ -50,6 +50,12 @@ fails = [g for g in gw if g["op"] == "sql" and g["code"] != 0]
 print("== board requests that failed: %d" % len(fails))
 for g in fails[:25]:
     print("  %s %-5s %-60s -> %s" % (hhmm(g["ts"]), g["agent"], g["detail"].replace("\n", " ")[:60], g["out"].splitlines()[0][:60]))
+try:
+    st = json.load(open(R + "/state/STALLED"))
+    print("== run STALLED at %s: no merge accepted for %d min (stall_min %s)"
+          % (hhmm(st["ts"]), st["idle_s"] // 60, st["stall_min"]))
+except (OSError, ValueError, KeyError):
+    pass
 print("== merges landed: %d" % len(merges))
 for m in merges:
     print("  %s %-5s %-50s files=%s" % (hhmm(m["ts"]), m["agent"], m["title"][:50], ",".join(m["files"])))

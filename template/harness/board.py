@@ -42,6 +42,17 @@ if os.path.exists(R + "/state/DONE"):
     print("== RUN COMPLETE in %.1f min  done on main: %s" % (took, done or "-"))
 else:
     print("== %s  time left: %s min  done on main: %s" % (time.strftime("%H:%M:%S"), left, done or "-"))
+stall_min = json.load(open(R + "/config.json")).get("stall_min") or 0
+if os.path.exists(R + "/state/STALLED"):
+    print("== STALLED: no merge was accepted for %s min (stall_min). The run is over; what landed stays on main."
+          % stall_min)
+elif stall_min and not os.path.exists(R + "/state/DONE"):
+    try:   # the stall clock is shown to the boss only, so agents are not tempted to land filler to reset it
+        idle = (time.time() - float(open(R + "/state/stall_from").read())) / 60
+        print("== stall clock: %.0f of %s min without an accepted merge%s" % (max(0, idle), stall_min,
+              " (stopped while paused)" if os.path.exists(R + "/state/HALT") else ""))
+    except (OSError, ValueError):
+        pass
 if os.path.exists(R + "/state/HALT"):
     print("== TEAM PAUSED: " + open(R + "/state/HALT").read()[:400])
 if os.path.exists(R + "/state/board.db"):
