@@ -104,17 +104,20 @@ tool the profile does not grant. Choose the smallest profile the task needs.
 | `research` | `sealed` plus `WebSearch`, `WebFetch` | Agents must read documentation or look things up | The team is no longer offline. A page can carry instructions to the agent, and what the agent puts in a search or URL leaves the machine. |
 | `allied` | `research` plus `Agent` (subagents) | An agent has large reading or search jobs to hand off | A subagent works out of the agent's sight. Its tool calls pass the monitor and the sandbox like the agent's own (shown live); its report comes back through `SubagentHandback`, which the monitor passes on `allied` and `open` (not yet re-shown live) |
 | `open` | `allied` plus `Skill`; slash commands on | An agent should run its own `/goal` or `/loop`, or use skills | The agent sees your installed skills, and `/loop` and `/goal` add a second control loop beside the harness's own |
+| `remote` | `open` plus a shell that may run `ssh`, `scp`, `sftp`, `rsync`, `curl`, `wget` (and the `bridge` CLI). Only with `"sandbox": false`; `setup.sh` refuses it otherwise | An agent must work on another machine (an HPC host through `bridge` or SSH) | Everything an unwalled run gives up, plus: the agent acts on other machines, where nothing here watches it, and can send anything it can read there. The monitor still refuses these commands aimed at this machine (`localhost`, its own name). Tested with stubs only |
 
-In every profile: the shell has no network (the sandbox allows no domain, and a Bash call that asks
-for one with `allowed_domains` pauses the team), connectors (MCP servers) are off, a pause refuses
+In every profile but `remote`: the shell has no network (the sandbox allows no domain, and a Bash
+call that asks for one with `allowed_domains` or runs `ssh`, `curl` and the like pauses the team;
+in an unwalled run only that monitor rule is left, so it is requested, not enforced).
+In every profile: connectors (MCP servers) are off, a pause refuses
 every tool call, `tmux` and `claude` stay blocked, and only the merge job moves `main`.
 `WebFetch` may fetch only `http` and `https` pages on the public internet; a URL for this
 machine, its private network or a file pauses the team. On Claude Code 2.1.331 a `research`
 session has the `WebFetch` tool itself; where `Agent` is present (`allied`, `open`) Claude Code
 drops it and fetches pages through a `web-fetch` subagent, whose fetches the monitor checks the
 same way. `harness/boss.sh status` lists each agent as `<agent>=<profile>`. An agent cannot
-start `/goal` itself (Claude Code treats it as a command typed by a person); put an `open` agent
-under `/goal` with `harness/boss.sh slash <id> "/goal <condition>"`, which `references/goal.md`
+start `/goal` itself (Claude Code treats it as a command typed by a person); put an `open` or
+`remote` agent under `/goal` with `harness/boss.sh slash <id> "/goal <condition>"`, which `references/goal.md`
 explains. Not yet shown live. `references/design.md` says what is enforced.
 
 #### Unwalled runs (`"sandbox": false`)

@@ -6,7 +6,7 @@ Check flags and settings against your own version.
 | Part | Implementation | File |
 |---|---|---|
 | Separate sessions | One `claude` process per tmux window, started with the brief as its first message | `harness/run-agent.sh`, `launch.sh` |
-| Profiles | `--tools` gets the profile's list; `sealed`, `research` and `allied` add `--disable-slash-commands`, `open` leaves it out and adds `Skill`. `--strict-mcp-config` with no server keeps connectors off in every profile (a plugin's tools may still be offered; the monitor refuses them). The default, `sealed`, is `--tools Bash,Edit,Read,Write,Glob,Grep`: no web access, subagents, Claude Code's own cross-session messaging or connectors. Messages between agents go through the gateway instead (`team msg`) | `harness/profiles.py`, `harness/run-agent.sh` |
+| Profiles | `--tools` gets the profile's list; `sealed`, `research` and `allied` add `--disable-slash-commands`, `open` and `remote` leave it out and add `Skill` (`remote` gets the same flags as `open`; only the monitor treats it differently). `--strict-mcp-config` with no server keeps connectors off in every profile (a plugin's tools may still be offered; the monitor refuses them). The default, `sealed`, is `--tools Bash,Edit,Read,Write,Glob,Grep`: no web access, subagents, Claude Code's own cross-session messaging or connectors. Messages between agents go through the gateway instead (`team msg`) | `harness/profiles.py`, `harness/run-agent.sh` |
 | Walls | The shell sandbox, per agent: `denyRead` on the harness, records, state, task files, other workspaces and the rest of the home directory (every entry of `~/.claude` but `shell-snapshots/`, every dot-entry of `~` but a short list); no network domains, and the monitor refuses a Bash call that asks for some (`allowed_domains`) | `harness/mk_settings.py`, `harness/hook.py` |
 | Door | `team` writes a request file into `.gw/req` in the workspace and waits for the reply in `.gw/resp` | `bin/team` |
 | Board | One SQLite file in `state/`, opened only by the gateway. `me()` is a SQL function the gateway binds per agent; an authorizer limits what helpers may run, and refuses every write to the gateway's own tables (`messages`, `message_reads`) | `harness/gateway.py` (`Board`) |
@@ -41,6 +41,7 @@ Check flags and settings against your own version.
   `allowed_domains`, and on any Bash parameter but `command`, `description`, `timeout` and
   `run_in_background` (the only ones the proof runs' 1,866 recorded calls carried, besides
   `allowed_domains`). The last step of `selftest.sh` shows it before launch.
+  In `remote` (sandbox off) the parameter would open nothing, so it is refused without a pause.
 - **`"sandbox": false` writes `"enabled": false` and keeps the rest.** In an unwalled run the
   settings keep the `denyRead` list, the empty `allowedDomains` and both flags below; with
   `enabled` false Claude Code applies none of them, so the shell runs as the OS user with the

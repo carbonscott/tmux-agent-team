@@ -59,7 +59,7 @@ work directory, where the agents' sandbox and the merge job's sandbox can both r
 | Part | Status |
 |---|---|
 | Writes outside the workspace, reading other workspaces or the harness, network access, reaching tmux | Enforced for shell commands by the sandbox (tested from inside an agent session) |
-| No network for the shell, in every profile | Enforced twice. The sandbox allows no domain. The monitor pauses the team on a Bash call that asks for network with `allowed_domains` (Claude Code 2.1.331 honoured that parameter: the shell fetched a page in all four profiles) or carries any parameter but `command`, `description`, `timeout` and `run_in_background`. The monitor rule is tested with stubs and by `selftest.sh` (its last step); not yet seen in a live session. |
+| No network for the shell, in every profile but `remote` | Enforced twice. The sandbox allows no domain. The monitor pauses the team on a Bash call that asks for network with `allowed_domains` (Claude Code 2.1.331 honoured that parameter: the shell fetched a page in all four profiles) or carries any parameter but `command`, `description`, `timeout` and `run_in_background`. The monitor rule is tested with stubs and by `selftest.sh` (its last step); not yet seen in a live session. |
 | Reading the owner's files in the home directory (`~/.claude/history.jsonl`, `~/.claude/projects/`, credentials, any dot-folder) | Enforced for shell commands by the sandbox: every entry of `~/.claude` but `shell-snapshots/` and every dot-entry of `~` but the shell's own files, user-installed programs under `.local` and the uv and pip caches are hidden (`mk_settings.py`, run again at every launch). `~/.gitconfig` is hidden too, so the agents' environment sets `GIT_CONFIG_GLOBAL=/dev/null`. The monitor also pauses the team on the bare words `.claude` and `.ssh`, which a quoted or built path can get past. |
 | The three rows above, in an unwalled run (`"sandbox": false`) | Requested for that run, not enforced: the sandbox is off, so only the monitor's fixed rules stand between the shell and those places, and they judge the command text. See "An unwalled run" below for every guarantee that changes. |
 | Board permissions, statement time limit, atomic claims, one transaction per request | Enforced by the gateway (tested) |
@@ -178,9 +178,9 @@ either merged or not), and an agent's train of thought.
 
 The sealed team is the default because every wall in it has been tested from inside a
 session. Each wider profile adds one kind of reach and keeps every wall of the narrower
-one: the shell sandbox is identical in all four (no network domains, and the monitor pauses the
+one: the shell sandbox is identical in the first four (no network domains, and the monitor pauses the
 team on a Bash call that asks for one with `allowed_domains`), and the monitor
-refuses whatever the profile does not grant. The profiles are a fixed list of four in
+refuses whatever the profile does not grant. `remote`, below, is the exception. The profiles are a fixed list of five in
 `harness/profiles.py`; a custom profile in `config.json` was left out so that each
 combination the monitor sees has been thought through. Add one there if you need it.
 
@@ -190,6 +190,22 @@ the merge job moves `main`. What does not: the agent sees the owner's installed 
 skill brings its own instructions into the session, and `/loop` or `/goal` can keep an
 agent working on its own schedule. The Stop hook still refuses to let it stop early, and
 still lets it stop when the run is over.
+
+`remote` is `open` plus a shell that may run `ssh`, `scp`, `sftp`, `rsync`, `curl` and `wget`
+(`profiles.NET_CMDS`), for work on another machine. It is the one profile that does not keep
+every wall of the narrower one, so it exists only in an unwalled run (`"sandbox": false`):
+with the sandbox on those commands could reach nothing, and `setup.sh` refuses it (`profiles.py
+--check`); the monitor also passes them only while the sandbox is off, as a second lock. Every
+other monitor rule holds for it (`tmux`, `screen`, `claude`, `sudo`, `su`, `nc` and `socat`,
+`git push`, the harness paths, `board.db`, `.ssh`, other workspaces, the pause), and so does a
+rule only it has: a network command aimed at this machine (`localhost`, `127.*`, `::1`, its own
+host name) pauses the team, since `ssh localhost 'tmux ls'` would run what the `tmux` rule
+refuses. That rule reads the command text and is easy to get past (an alias in `~/.ssh/config`,
+an address the rule does not list): it guards against mistakes, as everything does in an
+unwalled run. `allowed_domains` means nothing with the sandbox off, so in `remote` it is
+refused without a pause. What the agent does on the other machine is out of the monitor's
+sight: it sees the command line, not what runs there. The `bridge` CLI needs nothing more: it
+is a program on the `PATH` that the monitor never matched. Tested with stubs only.
 
 ## Adapting it
 

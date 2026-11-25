@@ -60,4 +60,16 @@ for key, value in {
     "{CHECK}": check,
 }.items():
     text = text.replace(key, value)
+# An agent on the remote profile (only in a run with the sandbox off) may reach other machines:
+# its brief says so, and which of the limits above still hold.
+if ((cfg.get("agent_profiles") or {}).get(agent) or cfg.get("profile")) == "remote":
+    tail += ("\n## Remote machines\n\n"
+             "Your profile is `remote`. This run's shell sandbox is off, and your shell may reach other "
+             "machines: you may run `ssh`, `scp`, `sftp`, `rsync`, `curl`, `wget` and the `bridge` CLI. That "
+             "replaces the limits above only for those commands, and only for the machines your task "
+             "names. Never connect back to this machine with them (`localhost`, its own name): that pauses "
+             "the team. Do not give a shell command `allowed_domains`: it is refused, since the network is "
+             "already open. Every other rule above still holds: your workspace only, no `tmux`, `claude`, "
+             "`sudo` or `git push`, nothing under `.ssh`, `.claude`, the harness, the records or the state. "
+             "Write what you do on a remote machine in the board, so the team and the boss can follow it.\n")
 print(text.rstrip("\n") + "\n" + tail)
