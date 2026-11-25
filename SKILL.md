@@ -58,7 +58,8 @@ Settings in `config.json`:
 | `stall_min` | Minutes without an accepted merge after which the run ends as `STALLED` (fractions allowed; `0` or absent switches it off). The template sets 30. |
 | `model`, `effort` | The model and the effort level every agent runs with. An empty `model` means Claude Code's default; `effort` defaults to `medium`. |
 | `session` | Name of the tmux session |
-| `profile`, `agent_profiles` | What every agent may use, and per-agent exceptions: `"agent_profiles": {"h1": "research"}`. Default `sealed`. See "Profiles" below; `setup.sh` refuses a name it does not know. |
+| `profile`, `agent_profiles` | What every agent may use, and per-agent exceptions. Each value is a name (a preset or a key of `profiles`) or a knob object: `"agent_profiles": {"h1": "research", "h2": {"base": "open", "web": false}}`. Default `sealed`. See "Profiles" below; `setup.sh` refuses a name, knob or value it does not know. |
+| `profiles` | Optional named custom profiles, each a knob object: `"profiles": {"reader": {"web": true}, "delegator": {"base": "reader", "subagents": true}}`. A name is lower-case letters, digits, `-` and `_`, starts with a letter, and may not be a preset's name. |
 | `task.statements` | Names of the statements |
 | `task.check` | Shell command that checks one statement in the repository root. `{name}` is replaced by the statement's name. Exit status 0 means done. |
 | `task.checks` | Optional map from a statement's name to its own check command, used exactly as written (no `{name}`). A statement in the map is checked with its command, the others with `task.check`. The merge job, `verify.py` and the briefs all follow it. |
@@ -98,26 +99,62 @@ The other limits guard single operations against a hang; none of them limits the
 Each agent's session is started with the tools of its profile, and the monitor refuses every
 tool the profile does not grant. Choose the smallest profile the task needs.
 
-| Profile | Gives the agent | Use it when | What it gives up |
-|---|---|---|---|
-| `sealed` (default) | `Bash`, `Edit`, `Read`, `Write`, `Glob`, `Grep`; slash commands off | The repository and the check are all the task needs | Nothing: this is the tested team |
-| `research` | `sealed` plus `WebSearch`, `WebFetch` | Agents must read documentation or look things up | The team is no longer offline. A page can carry instructions to the agent, and what the agent puts in a search or URL leaves the machine. |
-| `allied` | `research` plus `Agent` (subagents) | An agent has large reading or search jobs to hand off | A subagent works out of the agent's sight. Its tool calls pass the monitor and the sandbox like the agent's own (shown live); its report comes back through `SubagentHandback`, which the monitor passes on `allied` and `open` (not yet re-shown live) |
-| `open` | `allied` plus `Skill`; slash commands on | An agent should run its own `/goal` or `/loop`, or use skills | The agent sees your installed skills, and `/loop` and `/goal` add a second control loop beside the harness's own |
-| `remote` | `open` plus a shell that may run `ssh`, `scp`, `sftp`, `rsync`, `curl`, `wget` (and the `bridge` CLI). Only with `"sandbox": false`; `setup.sh` refuses it otherwise | An agent must work on another machine (an HPC host through `bridge` or SSH) | Everything an unwalled run gives up, plus: the agent acts on other machines, where nothing here watches it, and can send anything it can read there. The monitor still refuses these commands aimed at this machine (`localhost`, its own name). Tested with stubs only |
+A profile is a set of four knobs, each on or off:
 
-In every profile but `remote`: the shell has no network (the sandbox allows no domain, and a Bash
+| Knob | Turns on | What it gives up |
+|---|---|---|
+| `web` | `WebSearch`, `WebFetch` | The team is no longer offline. A page can carry instructions to the agent, and what the agent puts in a search or URL leaves the machine. |
+| `subagents` | `Agent` (subagents), and `SubagentHandback` from inside a subagent | A subagent works out of the agent's sight. Its tool calls pass the monitor and the sandbox like the agent's own, and get only the agent's own knobs. |
+| `skills` | `Skill`, and slash commands (no `--disable-slash-commands`) | The agent sees your installed skills, and `/loop` and `/goal` add a second control loop beside the harness's own. `boss.sh slash` works only where this is on. |
+| `shell_net` | A shell that may run `ssh`, `scp`, `sftp`, `rsync`, `curl`, `wget` (`profiles.NET_CMDS`; the `bridge` CLI needs nothing) | Only with `"sandbox": false`; `setup.sh` refuses it otherwise. Everything an unwalled run gives up, plus: the agent acts on other machines, where nothing here watches it. The monitor still refuses these commands aimed at this machine (`localhost`, its own name). Tested with stubs only. |
+
+Every profile has `Bash`, `Edit`, `Read`, `Write`, `Glob`, `Grep`. The named profiles are
+presets, shortcuts for a knob set; each starts exactly the session it did before knobs existed:
+
+| Preset | Knobs on | Use it when |
+|---|---|---|
+| `sealed` (the default) | none: shell and file tools, slash commands off | The repository and the check are all the task needs. This is the tested team. |
+| `research` | `web` | Agents must read documentation or look things up |
+| `allied` | `web`, `subagents` | An agent has large reading or search jobs to hand off |
+| `open` | `web`, `subagents`, `skills` | An agent should run its own `/goal` or `/loop`, or use skills |
+| `remote` | all four | An agent must work on another machine (an HPC host through `bridge` or SSH); unwalled runs only |
+
+A profile value in `config.json` (`profile`, each value of `agent_profiles`, each value of
+`profiles`) is either a name (a preset, or a key of `profiles`) or a knob object: an optional
+`"base"` (a name; `sealed` when absent) and any knob as `true` or `false`, each overriding the
+base. `{"base": "open", "web": false}` is `subagents` and `skills`. Name a combination you use
+more than once in `"profiles"`:
+
+    "profiles": {"reader": {"web": true}, "delegator": {"base": "reader", "subagents": true}},
+    "agent_profiles": {"h1": "reader", "h2": "delegator", "h3": {"skills": true}}
+
+`setup.sh` (through `profiles.py --check`) refuses, naming the problem: an unknown knob, a knob
+that is not exactly `true` or `false`, an unknown base or name, a cycle of bases, a custom name
+that reuses a preset's or is badly formed, `shell_net` while the sandbox is on, and a
+`"sandbox"` key inside a profile. The sandbox stays team-wide, one setting for every agent:
+an agent with its shell unwalled could read and write what the walls protect for all the
+others (the board file, `central.git`, their workspaces, the harness), so walling the rest
+would no longer protect them. `references/decisions/knobs.md` records the experiments behind
+this and whether composing knobs weakens the hardening. An agent whose profile does not
+resolve is granted no tool at all by the monitor.
+
+`harness/boss.sh status` lists each agent's profile as the preset's name (`lead=sealed`),
+`<name>(<knobs on>)` for a named custom profile (`h1=reader(web)`), or `custom(<knobs on>)`
+for a knob object (`h3=custom(skills)`; `custom()` when none is on). Knobs are listed in the
+order `web,subagents,skills,shell_net`. The offline monitor and the run's page use the same labels.
+
+Without `shell_net` the shell has no network (the sandbox allows no domain, and a Bash
 call that asks for one with `allowed_domains` or runs `ssh`, `curl` and the like pauses the team;
 in an unwalled run only that monitor rule is left, so it is requested, not enforced).
 In every profile: connectors (MCP servers) are off, a pause refuses
 every tool call, `tmux` and `claude` stay blocked, and only the merge job moves `main`.
 `WebFetch` may fetch only `http` and `https` pages on the public internet; a URL for this
-machine, its private network or a file pauses the team. On Claude Code 2.1.331 a `research`
-session has the `WebFetch` tool itself; where `Agent` is present (`allied`, `open`) Claude Code
+machine, its private network or a file pauses the team. On Claude Code 2.1.331 a session with
+`web` alone has the `WebFetch` tool itself; where `Agent` is present too (`subagents` on) Claude Code
 drops it and fetches pages through a `web-fetch` subagent, whose fetches the monitor checks the
-same way. `harness/boss.sh status` lists each agent as `<agent>=<profile>`. An agent cannot
-start `/goal` itself (Claude Code treats it as a command typed by a person); put an `open` or
-`remote` agent under `/goal` with `harness/boss.sh slash <id> "/goal <condition>"`, which `references/goal.md`
+same way. An agent cannot
+start `/goal` itself (Claude Code treats it as a command typed by a person); put an agent with
+`skills` on under `/goal` with `harness/boss.sh slash <id> "/goal <condition>"`, which `references/goal.md`
 explains. Not yet shown live. `references/design.md` says what is enforced.
 
 #### Unwalled runs (`"sandbox": false`)
@@ -227,7 +264,7 @@ One boss can run several teams at once. Each team is its own copy of the templat
 | `./launch.sh` | Starts the tmux session and the run clock |
 | `./launch.sh --resume` | Continues an interrupted run: same board and `main`, time down given back |
 | `harness/wait-run.sh [seconds]` | Blocks until the run completes, stalls, pauses, or times out. First line: the state word and the session, e.g. `DONE [<session>]` |
-| `harness/boss.sh status / trust / say <id or all> "<text>" / slash <id> "/<command>" / messages / resume / unstall / remove <id> / end` | The boss's controls. `messages` prints every message the agents sent each other; `slash` types a slash command into an `open` agent's window; `unstall` reopens a stalled run. Every line it prints by itself starts with `[<session>] ` (`say` prints `[<session>] typed into <id>: <text>`); `status` starts with `[<session>] <work dir>`. |
+| `harness/boss.sh status / trust / say <id or all> "<text>" / slash <id> "/<command>" / messages / resume / unstall / remove <id> / end` | The boss's controls. `messages` prints every message the agents sent each other; `slash` types a slash command into the window of an agent with the `skills` knob on; `unstall` reopens a stalled run. Every line it prints by itself starts with `[<session>] ` (`say` prints `[<session>] typed into <id>: <text>`); `status` starts with `[<session>] <work dir>`. |
 | `harness/py harness/verify.py` | Checks every statement on a fresh checkout of `main` |
 | `harness/py harness/from-goal.py <contract> [--apply --allowed <regex> ...]` | Turns a make-goal contract into the task, before `setup.sh` |
 | `harness/py harness/offline_monitor.py` | Summary of the run's records |

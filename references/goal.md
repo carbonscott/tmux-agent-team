@@ -8,7 +8,7 @@ both are allowed:
 | Way | Who runs `/goal` | What the loop's condition is | Use it when |
 |---|---|---|---|
 | The boss under `/goal` | The boss, in its own session | `harness/verify.py` prints PASS for every statement | The whole contract is the team's task (the main way) |
-| An agent under `/goal` | One agent on the `open` profile, inside the team | The agent's own part is merged | An agent wants its own loop for the statement it claimed |
+| An agent under `/goal` | One agent with the `skills` knob on (`open`), inside the team | The agent's own part is merged | An agent wants its own loop for the statement it claimed |
 
 Neither way starts a new tmux session or a new Claude Code session from inside the team.
 
@@ -141,7 +141,8 @@ ledger as checkers, not as delegated work.
 
 ## An agent under `/goal`
 
-On the `open` profile an agent has slash commands, skills and subagents, so it may run under
+With the `skills` knob on (the `open` and `remote` presets, or any profile that turns it on) an
+agent has slash commands and skills, so it may run under
 `/goal` in its own session for its own part of the work. It is allowed, not expected:
 nothing in the briefs asks for it.
 
@@ -153,7 +154,7 @@ because it puts `[boss] ` in front. So the boss puts an agent under `/goal` with
     harness/boss.sh slash <id> "/goal <condition>"
 
 which types that one line as it is and presses Enter. It is refused for an agent whose profile
-is not `open`, for a removed agent, for `all`, and for anything but one line of printable text
+does not have the `skills` knob on, for a removed agent, for `all`, and for anything but one line of printable text
 that starts with `/`. Agree the condition with the user first (see "Done means merged" below),
 and treat it like any other message to the team: facts and a bound, not hints about the work.
 Not yet shown live: no agent has been put under `/goal` this way, and how its loop and the

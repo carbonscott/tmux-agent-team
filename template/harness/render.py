@@ -8,6 +8,9 @@ import os
 import re
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import profiles  # noqa: E402
+
 R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 cfg = json.load(open(R + "/config.json"))
 agent = sys.argv[1]
@@ -69,11 +72,21 @@ if cfg.get("sandbox", True) is False:
              "files outside your workspace. The rules still hold all the same. Keep to your workspace, use "
              "only `team` for the board and `main`, and use no network unless your profile below says so. "
              "The action monitor still checks every command and pauses the team on a violation.\n")
-# An agent on the remote profile (only in a run with the sandbox off) may reach other machines:
-# its brief says so, and which of the limits above still hold.
-if ((cfg.get("agent_profiles") or {}).get(agent) or cfg.get("profile")) == "remote":
+
+
+def _shell_net(cfg, agent):
+    """The agent's profile has the shell_net knob, in a run with the sandbox off (profiles.resolve)."""
+    try:
+        return bool(profiles.resolve(cfg, agent)["shell_net"])
+    except Exception:
+        return False
+
+
+# An agent whose profile has the shell_net knob (the remote preset or a knob set with it; only in a
+# run with the sandbox off) may reach other machines: its brief says so, and which limits still hold.
+if _shell_net(cfg, agent):
     tail += ("\n## Remote machines\n\n"
-             "Your profile is `remote`. This run's shell sandbox is off, and your shell may reach other "
+             "Your profile (`" + profiles.label_of(cfg, agent) + "`) has the `shell_net` knob. This run's shell sandbox is off, and your shell may reach other "
              "machines: you may run `ssh`, `scp`, `sftp`, `rsync`, `curl`, `wget` and the `bridge` CLI. That "
              "replaces the limits above only for those commands, and only for the machines your task "
              "names. Never connect back to this machine with them (`localhost`, its own name): that pauses "

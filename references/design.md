@@ -59,7 +59,7 @@ work directory, where the agents' sandbox and the merge job's sandbox can both r
 | Part | Status |
 |---|---|
 | Writes outside the workspace, reading other workspaces or the harness, network access, reaching tmux | Enforced for shell commands by the sandbox (tested from inside an agent session) |
-| No network for the shell, in every profile but `remote` | Enforced twice. The sandbox allows no domain. The monitor pauses the team on a Bash call that asks for network with `allowed_domains` (Claude Code 2.1.331 honoured that parameter: the shell fetched a page in all four profiles) or carries any parameter but `command`, `description`, `timeout` and `run_in_background`. The monitor rule is tested with stubs and by `selftest.sh` (its last step); not yet seen in a live session. |
+| No network for the shell, in every profile without `shell_net` | Enforced twice. The sandbox allows no domain. The monitor pauses the team on a Bash call that asks for network with `allowed_domains` (Claude Code 2.1.331 honoured that parameter: the shell fetched a page in all four profiles) or carries any parameter but `command`, `description`, `timeout` and `run_in_background`. The monitor rule is tested with stubs and by `selftest.sh` (its last step); not yet seen in a live session. |
 | Reading the owner's files in the home directory (`~/.claude/history.jsonl`, `~/.claude/projects/`, credentials, any dot-folder) | Enforced for shell commands by the sandbox: every entry of `~/.claude` but `shell-snapshots/` and every dot-entry of `~` but the shell's own files, user-installed programs under `.local` and the uv and pip caches are hidden (`mk_settings.py`, run again at every launch). `~/.gitconfig` is hidden too, so the agents' environment sets `GIT_CONFIG_GLOBAL=/dev/null`. The monitor also pauses the team on the bare words `.claude` and `.ssh`, which a quoted or built path can get past. |
 | The three rows above, in an unwalled run (`"sandbox": false`) | Requested for that run, not enforced: the sandbox is off, so only the monitor's fixed rules stand between the shell and those places, and they judge the command text. See "An unwalled run" below for every guarantee that changes. |
 | Board permissions, statement time limit, atomic claims, one transaction per request | Enforced by the gateway (tested) |
@@ -68,7 +68,7 @@ work directory, where the agents' sandbox and the merge job's sandbox can both r
 | `main` is closed once the run is complete | Enforced by the gateway: after `state/DONE`, `team mr` and `team precheck` are refused, also for a request that was waiting for the merge lock when the run completed; `status`, `sql`, `msg` and `push` (to the agent's own branch) still answer. Chosen after the live proof run, where a merge was accepted three minutes after completion: a late merge could only land if every statement still passed, but it would move `main` under the boss's `verify.py` and hand-back. Tested with stubs. |
 | A statement's own check (`task.checks`) | Enforced by the merge job and `verify.py` exactly like `task.check`; shown only by stub-based tests |
 | A task written from a make-goal contract (`from-goal.py`) | Only the conversion is checked: refused for exploratory contracts, for contracts with no command, and after `setup.sh`. Whether each item's command really proves the item is the boss's judgement. |
-| The boss under `/goal`, or an agent's own `/goal` on the `open` profile | Requested only (`references/goal.md`). The harness does not see the goal loop; it sees the tool calls and merges it causes. |
+| The boss under `/goal`, or an agent's own `/goal` with the `skills` knob on | Requested only (`references/goal.md`). The harness does not see the goal loop; it sees the tool calls and merges it causes. |
 | Pause on a rule violation | Enforced by the hook (tested) |
 | Agents learn that the run is over | `team status` and `team wait` exit 3 while the team is paused and 4 once the run is over for the agent (complete, stalled, out of time, removed), with the reason on stderr as well as stdout; `team wait` waits in the gateway and returns at once when either happens, so `team wait 100 \| grep ...` cannot hide the end. That an agent acts on it is only requested by the briefs. Tested with stubs. |
 | Ending a stalled run (`stall_min`) | Enforced by the gateway: it writes `state/STALLED` from its 2-second watch loop and then refuses `sql`, `push` and `mr`; the Stop hook lets agents go. Pauses and down time before a resume are moved out of the stall clock (`state/stall_from`) the same way they are moved out of the deadline. A merge being checked when the limit passes gets its answer first. Tested with the stub tmux only; never seen in a real run. Agents are not shown the stall clock, so landing filler to reset it is not invited; nothing stops it either, beyond the check. A stall reopened with `boss.sh unstall` is kept as `records/stalled.<when reopened>.json`; `report.py`, `offline_monitor.py` and the archive's `STATUS.txt` list every stall, reopened ones included. |
@@ -84,10 +84,10 @@ work directory, where the agents' sandbox and the merge job's sandbox can both r
 | Honest results | A test suite is a weaker check than a proof. The merge job limits which paths change; it does not inspect what the code does. |
 | Tools outside the agent's profile | Enforced twice: the session is started with only the profile's tools (`--tools`), and the monitor refuses any other tool. Tested with stubs only. |
 | `WebFetch` only to public `http(s)` hosts | Enforced by fixed rules in `hook.py` (scheme, user names in URLs, loopback, link-local, private and other non-global addresses in any spelling, local-only names, and names that resolve to such an address within 2 s). A name that does not resolve in time is passed, and a name whose address changes between the check and the fetch is not caught. Tested with stubs only. |
-| Pages read by `research`, `allied` and `open` agents | Not checked. A page can carry instructions; the monitor judges the agent's next action, not what it read. |
+| Pages read by agents with the `web` knob on | Not checked. A page can carry instructions; the monitor judges the agent's next action, not what it read. |
 | A subagent's report to its agent (`SubagentHandback`) | Passed by the monitor where the profile grants `Agent`, from inside a subagent only, and recorded. Tested with stubs; not yet shown live (before the fix every report was refused). |
-| Tool calls made inside a subagent (`allied`, `open`) | Shown live (the profiles proof run, Claude Code 2.1.331 and 2.1.332): the `PreToolUse` hook fires for them and the shell sandbox applies to them. A subagent's `head -1 harness/gateway.py` and its `Write` outside the workspace were blocked and paused the team, the pause named the parent agent, and the records tag each such call with a `subagent` field (19 recorded; `offline_monitor.py` counts them). |
-| Skills and slash commands (`open`) | Each skill call passes the monitor and is recorded; the team skill itself is refused. What a skill then asks for goes through the monitor call by call. `/loop` and `/goal` are a second loop beside the Stop hook: they can keep an agent busy, never let it past a pause, a removal or the merge job. |
+| Tool calls made inside a subagent (`subagents` on) | Shown live (the profiles proof run, Claude Code 2.1.331 and 2.1.332): the `PreToolUse` hook fires for them and the shell sandbox applies to them. A subagent's `head -1 harness/gateway.py` and its `Write` outside the workspace were blocked and paused the team, the pause named the parent agent, and the records tag each such call with a `subagent` field (19 recorded; `offline_monitor.py` counts them). |
+| Skills and slash commands (`skills` on) | Each skill call passes the monitor and is recorded; the team skill itself is refused. What a skill then asks for goes through the monitor call by call. `/loop` and `/goal` are a second loop beside the Stop hook: they can keep an agent busy, never let it past a pause, a removal or the merge job. |
 | Connectors (MCP servers) | Off in every profile (`--strict-mcp-config`, no server given). A connector acts outside the shell sandbox with its own credentials, and the monitor cannot judge what it does. Live sessions were still offered `EndConversation` and a plugin's tool (`mcp__easel__chart`) in every profile; the monitor refuses both, as it refuses every tool a profile does not grant. |
 
 Exercised since: every profile, in the profiles proof run (one probe session per profile, and
@@ -180,20 +180,35 @@ The sealed team is the default because every wall in it has been tested from ins
 session. Each wider profile adds one kind of reach and keeps every wall of the narrower
 one: the shell sandbox is identical in the first four (no network domains, and the monitor pauses the
 team on a Bash call that asks for one with `allowed_domains`), and the monitor
-refuses whatever the profile does not grant. `remote`, below, is the exception. The profiles are a fixed list of five in
-`harness/profiles.py`; a custom profile in `config.json` was left out so that each
-combination the monitor sees has been thought through. Add one there if you need it.
+refuses whatever the profile does not grant. `remote`, below, is the exception.
 
-What still holds in `open`: the monitor sees every tool call the session and its subagents make, a pause
+A profile is a set of four knobs: `web` (`WebSearch`, `WebFetch`), `subagents` (`Agent`, and
+`SubagentHandback` from inside a subagent), `skills` (`Skill` and slash commands) and
+`shell_net` (the shell's `profiles.NET_CMDS`, unwalled runs only). The five named profiles are
+presets for knob sets (`sealed` none, `research` `web`, `allied` adds `subagents`, `open` adds
+`skills`, `remote` all four), and each starts exactly the session it did when they were a fixed
+list. `config.json` may also give a knob object (`{"base": "open", "web": false}`) or a
+name from its `"profiles"` map. One function in `harness/profiles.py` resolves every one of
+them; the monitor, `run-agent.sh`, `selftest.sh`, `boss.sh`, `offline_monitor.py`, `report.py`
+and the archive's `run.json` all call it, so the session's `--tools` and what the monitor passes
+cannot drift apart. A value it cannot resolve fails closed: `setup.sh` refuses it, and the
+monitor grants such an agent no tool at all. The knobs are independent because each one adds a
+tool the monitor already judges call by call; whether a combination nobody had thought
+through weakens anything was tested, not assumed: `references/decisions/knobs.md` records the
+hypotheses, experiments and verdicts. The sandbox is not a knob: it stays one setting for the
+whole team, because one unwalled agent could reach the board file, `central.git` and the other
+workspaces that the walls protect for everyone.
+
+What still holds with `skills` on (`open`): the monitor sees every tool call the session and its subagents make, a pause
 refuses them all (skills included), `tmux` and `claude` are blocked in the shell, and only
 the merge job moves `main`. What does not: the agent sees the owner's installed skills, a
 skill brings its own instructions into the session, and `/loop` or `/goal` can keep an
 agent working on its own schedule. The Stop hook still refuses to let it stop early, and
 still lets it stop when the run is over.
 
-`remote` is `open` plus a shell that may run `ssh`, `scp`, `sftp`, `rsync`, `curl` and `wget`
-(`profiles.NET_CMDS`), for work on another machine. It is the one profile that does not keep
-every wall of the narrower one, so it exists only in an unwalled run (`"sandbox": false`):
+`shell_net` (in the `remote` preset: `open` plus this knob) gives a shell that may run `ssh`, `scp`, `sftp`, `rsync`, `curl` and `wget`
+(`profiles.NET_CMDS`), for work on another machine. It is the one knob that does not keep
+every wall of the narrower profile, so it exists only in an unwalled run (`"sandbox": false`):
 with the sandbox on those commands could reach nothing, and `setup.sh` refuses it (`profiles.py
 --check`); the monitor also passes them only while the sandbox is off, as a second lock. Every
 other monitor rule holds for it (`tmux`, `screen`, `claude`, `sudo`, `su`, `nc` and `socat`,
@@ -202,7 +217,7 @@ rule only it has: a network command aimed at this machine (`localhost`, `127.*`,
 host name) pauses the team, since `ssh localhost 'tmux ls'` would run what the `tmux` rule
 refuses. That rule reads the command text and is easy to get past (an alias in `~/.ssh/config`,
 an address the rule does not list): it guards against mistakes, as everything does in an
-unwalled run. `allowed_domains` means nothing with the sandbox off, so in `remote` it is
+unwalled run. `allowed_domains` means nothing with the sandbox off, so with `shell_net` it is
 refused without a pause. What the agent does on the other machine is out of the monitor's
 sight: it sees the command line, not what runs there. The `bridge` CLI needs nothing more: it
 is a program on the `PATH` that the monitor never matched. Tested with stubs only.

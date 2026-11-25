@@ -10,7 +10,7 @@ RC=(); [ -n "${TEAM_REMOTE_CONTROL:-}" ] && RC=(--remote-control "team-$A")
 MODEL=$("$R/harness/py" -c "import json;print(json.load(open('$R/config.json')).get('model') or '')")
 EFFORT=$("$R/harness/py" -c "import json;print(json.load(open('$R/config.json')).get('effort') or 'medium')")
 [ -n "$MODEL" ] && RC+=(--model "$MODEL")
-# The agent's profile (harness/profiles.py) decides its tools. The default, sealed, is a shell and
+# The agent's profile (harness/profiles.py: a preset or a set of knobs) decides its tools. The default, sealed, is a shell and
 # file tools only: no web, no subagents, no slash commands or skills. No profile has MCP servers
 # (--strict-mcp-config); sessions may still be offered EndConversation and tools that plugins
 # register, which the monitor (hook.py) refuses.

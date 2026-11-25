@@ -13,7 +13,7 @@ refused() { ( cd "$W" && ./setup.sh ) >"$TOP/out.log" 2>&1 && no "$1" || ok "$1"
 # remote is refused while the sandbox is on, however it is named and however the flag is written
 mk_workdir lead h1; setcfg profile '"remote"'
 refused "setup.sh refuses remote as the team's default profile while the sandbox is on"
-check "the message names the remote agents" 'remote profile \(lead, h1\)' cat "$TOP/out.log"
+check "the message names the agents the default reaches" 'profile \(the default of lead, h1\)' cat "$TOP/out.log"
 check "and says how to turn the sandbox off" '"sandbox": false' cat "$TOP/out.log"
 [ -d "$W/ws" ] && no "nothing is created before the refusal" || ok "nothing is created before the refusal"
 mk_workdir lead h1; setcfg sandbox true; setcfg agent_profiles '{"h1": "remote"}'
@@ -73,7 +73,9 @@ rm -f "$W/state/removed/h1"
 
 # the second lock: if config.json turns the sandbox back on after setup, the monitor stops passing them
 setcfg sandbox true
-check "with the sandbox back on, the monitor blocks remote's ssh" 'BLOCKED by the action monitor' bash_ h1 'ssh sdfiana025 hostname'
+# with knobs, remote (shell_net) no longer resolves once the sandbox is on: the monitor grants nothing
+check "with the sandbox back on, the monitor refuses remote's ssh" '"permissionDecision": "deny".*not in the invalid profile' bash_ h1 'ssh sdfiana025 hostname'
+check "and every other tool too" '"permissionDecision": "deny"' hook h1 Read '{"file_path":"x"}'
 setcfg sandbox false
 
 # the brief tells a remote agent what it may do, and only a remote agent
