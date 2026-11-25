@@ -405,13 +405,14 @@ th{color:var(--mut);font-weight:600;white-space:nowrap}td code{font-size:.8rem;w
 .lanes{position:relative}.over{position:absolute;top:0;bottom:0;left:var(--who);right:0;pointer-events:none}
 .tick{position:absolute;bottom:2px;transform:translateX(-50%);color:var(--mut);white-space:nowrap}
 .tick:first-child{transform:none}
-.act{position:absolute;top:8px;height:10px;background:var(--act);border-radius:1px}
+/* lane marks live in a .track: the legend's swatches share their names (.k.act, .k.gone) */
+.track .act{position:absolute;top:8px;height:10px;background:var(--act);border-radius:1px}
 .m{position:absolute;top:6px;width:14px;height:14px;margin-left:-7px;border-radius:50%;border:2px solid var(--card)}
 .m.ok{background:var(--ok)}.m.no{background:var(--no);border-radius:2px;transform:rotate(45deg)}
 .m.blk{background:var(--warn);border-radius:2px}
 .m.done{width:auto;height:auto;border-radius:4px;background:var(--ok);color:#fff;padding:0 4px;font-weight:600;
 transform:translateX(-50%);margin-left:0;top:4px;font-size:.72rem;border:0;white-space:nowrap}
-.gone{position:absolute;top:0;bottom:0;right:0;background:repeating-linear-gradient(45deg,transparent 0 4px,var(--down) 4px 8px)}
+.track .gone{position:absolute;top:0;bottom:0;right:0;background:repeating-linear-gradient(45deg,transparent 0 4px,var(--down) 4px 8px)}
 .band{position:absolute;top:0;bottom:0}.band.pause{background:var(--pause)}
 .band.down{background:repeating-linear-gradient(135deg,var(--down) 0 6px,transparent 6px 12px)}
 .rule{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed var(--no)}.rule.deadline{border-color:var(--mut)}

@@ -5,6 +5,22 @@
 . "$(dirname "$0")/../lib.sh"
 rep() { ( cd "$W" && python3 harness/report.py -o "$TOP/r.html" ) >/dev/null 2>&1; cat "$TOP/r.html"; }
 fp() { find "$W/records" "$W/state" -type f ! -name 'board.db*' ! -name heartbeat -print0 | sort -z | xargs -0 md5sum | md5sum; }
+# CSS rules that would pull a legend swatch (<i class="k act">, ...) out of the legend: an
+# absolutely placed rule whose selector is only classes the swatch also has
+swatches() { python3 - "$1" <<'PY'
+import re, sys
+css = re.search(r"<style>(.*?)</style>", open(sys.argv[1]).read(), re.S).group(1)
+css = re.sub(r"@media[^{]*\{((?:[^{}]*\{[^{}]*\})*)[^{}]*\}", r"\1", css)
+bad = []
+for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+    if "position:absolute" in body.replace(" ", ""):
+        for s in (x.strip() for x in sel.split(",")):
+            for sw in ("act", "gone", "pause", "down", "stall", "ok", "no", "blk"):
+                if re.fullmatch(r"(\.[\w-]+)+", s) and set(s[1:].split(".")) <= {"k", sw}:
+                    bad.append("%s also matches the legend swatch .k.%s" % (s, sw))
+print("\n".join(bad) or "ok")
+PY
+}
 
 # ---- before setup.sh has run: no state, no records
 mk_workdir lead h1 h2
@@ -91,4 +107,7 @@ check "the done lane names each statement where it was done" '<b class="m done"[
 check "the page's title says how much is done" '<title>[^<]*3 of 3 done</title>' echo "$p"
 refute "the page loads nothing from the network" -i '(src|href)\s*=\s*["'"'"']?(https?:)?//|@import|url\(' echo "$p"
 check "SKILL.md puts the report in the finish steps" 'report\.py' cat "$REPO/SKILL.md"
+
+# ---- found by the live proof run
+check "the legend's swatches stay in the legend (no lane rule matches them)" '^ok$' swatches "$TOP/r.html"
 finish
